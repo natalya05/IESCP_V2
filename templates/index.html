@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask with Vue.js</title>
+</head>
+<body>
+    <div id="app">
+        <h1>[[ message ]]</h1>
+        <button @click="showLoginForm">Login</button>
+        <button @click="showRegisterForm">Register</button>
+
+        <!-- Login Form -->
+        <div v-if="isLoginVisible">
+            <h2>Login</h2>
+            <form @submit.prevent="handleLogin">
+                <div>
+                    <label for="login-username">Username:</label>
+                    <input type="text" id="login-username" v-model="loginUsername" required>
+                </div>
+                <div>
+                    <label for="login-password">Password:</label>
+                    <input type="password" id="login-password" v-model="loginPassword" required>
+                </div>
+                <p v-if="loginError" class="error">[[ loginError ]]</p>
+                <button type="submit">Login</button>
+            </form>
+            <p>Don't have an account? <button @click="showRegisterForm">Create New Account</button></p>
+        </div>
+
+        <!-- Register Form -->
+        <div v-if="isRegisterVisible">
+            <h2>Register</h2>
+            <form @submit.prevent="handleRegister">
+                <div>
+                    <label for="register-username">Username:</label>
+                    <input type="text" id="register-username" v-model="registerUsername" required>
+                </div>
+                <div>
+                    <label for="register-password">Password:</label>
+                    <input type="password" id="register-password" v-model="registerPassword" required>
+                </div>
+                <div>
+                    <label for="register-role">Role:</label>
+                    <select v-model="selectedRole" id="register-role" required>
+                        <option value="influencer">Influencer</option>
+                        <option value="sponsor">Sponsor</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <p v-if="registerError" class="error">[[ registerError ]]</p>
+                <p v-if="registerSuccess" class="success">[[ registerSuccess ]]</p>
+                <button type="submit">Register</button>
+            </form>
+            <p>Already have an account? <button @click="showLoginForm">Login</button></p>
+        </div>
+
+        <div v-if="isLoading">
+            <p>Loading...</p>
+        </div>
+        
+        <!-- Admin Dashboard -->
+        <admin-dashboard v-if="role === 'admin'"></admin-dashboard>
+        
+        <!-- Sponsor Dashboard -->
+        <sponsor-dashboard v-else-if="role === 'sponsor'"></sponsor-dashboard>
+        
+        <!-- Influencer Dashboard -->
+        <influencer-dashboard v-else-if="role === 'influencer'"></influencer-dashboard>
+        
+        <!-- Unauthorized Message -->
+        <p v-else>You are not authorized to view this content.</p>
+    
+    </div>
+
+
+    <!-- Templates for Vue Components -->
+    <script type="text/x-template" id="admin-dashboard">
+        <div>
+            <h1>Admin Dashboard</h1>
+            <p>Manage platform-wide operations here.</p>
+            <ul>
+                <li>Feature 1: User Management</li>
+                <li>Feature 2: Reporting</li>
+                <li>Feature 3: Platform Settings</li>
+            </ul>
+        </div>
+    </script>
+    
+    <script type="text/x-template" id="sponsor-dashboard">
+        <div>
+            <h1>Sponsor Dashboard</h1>
+            <p>View and manage your campaigns here.</p>
+            <ul>
+                <li v-for="campaign in campaigns" :key="campaign.id">
+                    [[ campaign.name ]] - Budget: [[ campaign.budget ]]
+                </li>
+            </ul>
+        </div>
+    </script>
+    
+    <script type="text/x-template" id="influencer-dashboard">
+        <div>
+            <h1>Influencer Dashboard</h1>
+            <p>View and manage your applied campaigns here.</p>
+            <ul>
+                <li v-for="campaign in appliedCampaigns" :key="campaign.id">
+                    [[ campaign.name ]] - Status: [[ campaign.status ]]
+                </li>
+            </ul>
+        </div>
+    </script>
+    <!-- Include Vue.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <!-- Include the external JavaScript file -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
