@@ -8,8 +8,10 @@
 <body>
     <div id="app">
         <h1>[[ message ]]</h1>
-        <button @click="showLoginForm">Login</button>
-        <button @click="showRegisterForm">Register</button>
+        <div v-if="!role && isLoginVisible">
+            <button @click="showLoginForm">Login</button>
+            <button @click="showRegisterForm">Register</button>
+        </div>
 
         <!-- Login Form -->
         <div v-if="isLoginVisible">
@@ -56,9 +58,7 @@
             <p>Already have an account? <button @click="showLoginForm">Login</button></p>
         </div>
 
-        <div v-if="isLoading">
-            <p>Loading...</p>
-        </div>
+        
         
         <!-- Admin Dashboard -->
         <admin-dashboard v-if="role === 'admin'"></admin-dashboard>
@@ -70,7 +70,7 @@
         <influencer-dashboard v-else-if="role === 'influencer'"></influencer-dashboard>
         
         <!-- Unauthorized Message -->
-        <p v-else>You are not authorized to view this content.</p>
+        <p v-else-if="!isLoading && !role">Please log in to access the platform.</p>
     
     </div>
 
@@ -85,6 +85,7 @@
                 <li>Feature 2: Reporting</li>
                 <li>Feature 3: Platform Settings</li>
             </ul>
+            <button @click="logout">Logout</button>
         </div>
     </script>
     
@@ -97,6 +98,7 @@
                     [[ campaign.name ]] - Budget: [[ campaign.budget ]]
                 </li>
             </ul>
+            <button @click="logout">Logout</button>
         </div>
     </script>
     
@@ -109,6 +111,7 @@
                     [[ campaign.name ]] - Status: [[ campaign.status ]]
                 </li>
             </ul>
+            <button @click="logout">Logout</button>
         </div>
     </script>
     <!-- Include Vue.js from CDN -->

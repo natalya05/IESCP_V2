@@ -1,12 +1,19 @@
+// Admin Dashboard Component
 Vue.component('admin-dashboard', {
     template: '#admin-dashboard',
     data() {
         return {
             // Add admin-specific data if needed
         };
+    },
+    methods: {
+        logout() {
+            this.$root.logout(); // Use root's logout method
+        }
     }
 });
 
+// Sponsor Dashboard Component
 Vue.component('sponsor-dashboard', {
     template: '#sponsor-dashboard',
     data() {
@@ -18,9 +25,15 @@ Vue.component('sponsor-dashboard', {
         axios.get('/sponsor/dashboard')
             .then(response => this.campaigns = response.data.campaigns)
             .catch(error => console.error('Error fetching sponsor data:', error));
+    },
+    methods: {
+        logout() {
+            this.$root.logout(); // Use root's logout method
+        }
     }
 });
 
+// Influencer Dashboard Component
 Vue.component('influencer-dashboard', {
     template: '#influencer-dashboard',
     data() {
@@ -32,9 +45,15 @@ Vue.component('influencer-dashboard', {
         axios.get('/influencer/dashboard')
             .then(response => this.appliedCampaigns = response.data.applied_campaigns)
             .catch(error => console.error('Error fetching influencer data:', error));
+    },
+    methods: {
+        logout() {
+            this.$root.logout(); // Use root's logout method
+        }
     }
 });
 
+// Main Vue Instance
 new Vue({
     el: '#app',
     delimiters: ['[[', ']]'],
@@ -78,13 +97,8 @@ new Vue({
             .then(response => {
                 if (response.data.success) {
                     this.role = response.data.role[0]; // Assuming the first role is the primary one
-                    if (this.role === 'admin') {
-                        window.location.href = '/admin/dashboard';
-                    } else if (this.role === 'sponsor') {
-                        window.location.href = '/sponsor/dashboard';
-                    } else if (this.role === 'influencer') {
-                        window.location.href = '/influencer/dashboard';
-                    }
+                    this.isLoginVisible = false; // Hide login form
+                    this.fetchDashboardData(); // Load dashboard data
                 } else {
                     this.loginError = response.data.error || 'Login failed.';
                 }
@@ -125,24 +139,52 @@ new Vue({
                     .then(response => this.appliedCampaigns = response.data.applied_campaigns)
                     .catch(error => console.error('Error fetching influencer data:', error));
             }
+        },
+        logout() {
+            axios.post('/api/logout')
+                .then(response => {
+                    if (response.data.success) {
+                        // Reset Vue instance state
+                        this.isLoginVisible = true;
+                        this.isRegisterVisible = false;
+                        this.loginUsername = '';
+                        this.loginPassword = '';
+                        this.registerUsername = '';
+                        this.registerPassword = '';
+                        this.selectedRole = 'influencer'; // Reset role
+                        this.loginError = '';
+                        this.registerError = '';
+                        this.registerSuccess = '';
+                        this.role = '';
+                        this.campaigns = [];
+                        this.appliedCampaigns = [];
+                        window.location.href = '/'; // Redirect to home page
+                    } else {
+                        console.error('Logout failed:', response.data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Logout request failed:', error);
+                });
         }
     },
     created() {
-        // Check if the user is logged in by getting their role
         axios.get('/api/user-role')
             .then(response => {
                 if (response.data.role) {
-                    this.role = response.data.role; // 'admin', 'sponsor', or 'influencer'
-                    this.isLoginVisible = false; // Hide login form if the user is already logged in
-                    this.fetchDashboardData(); // Fetch dashboard data based on user role
+                    this.role = response.data.role; // Valid user role
+                    this.isLoginVisible = false; // Hide login form
+                    this.fetchDashboardData();
                 } else {
-                    this.isLoginVisible = true; // Show login form if not logged in
+                    this.role = ''; // No role found
+                    this.isLoginVisible = true; // Show login form
                 }
                 this.isLoading = false;
             })
             .catch(error => {
                 console.error('Error fetching user role:', error);
-                this.isLoginVisible = true; // Show login form if there's an error
+                this.role = ''; // Reset role on error
+                this.isLoginVisible = true; // Ensure login form is shown
                 this.isLoading = false;
             });
     }

@@ -49,6 +49,32 @@ class User(db.Model, UserMixin):
     roles = db.relationship('Role', secondary=user_roles, backref=db.backref('users', lazy='dynamic'))
     role = db.Column(db.String(80), nullable=False, default='influencer')
 
+class Campaign(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    budget = db.Column(db.Float, nullable=False)
+    visibility = db.Column(db.String(50), nullable=False, default='public')  # 'public' or 'private'
+    goals = db.Column(db.Text, nullable=True)
+
+    # Relationship to AdRequest
+    ad_requests = db.relationship('AdRequest', back_populates='campaign', lazy='dynamic')
+
+class AdRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    campaign_id = db.Column(db.Integer, db.ForeignKey('campaign.id'), nullable=False)  # Foreign Key to Campaign
+    influencer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)   # Foreign Key to User
+    messages = db.Column(db.Text, nullable=True)
+    requirements = db.Column(db.Text, nullable=True)
+    payment_amount = db.Column(db.Float, nullable=True)
+    status = db.Column(db.String(50), nullable=False, default='Pending')  # Pending, Accepted, Rejected
+
+    # Relationships
+    campaign = db.relationship('Campaign', back_populates='ad_requests')
+    influencer = db.relationship('User', backref=db.backref('ad_requests', lazy='dynamic'))
+
 user_datastore = SQLAlchemyUserDatastore(db, User, Role)
 security = Security(app, user_datastore)
 
@@ -196,20 +222,33 @@ def api_login():
     return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
 
 
+@app.before_request
+def clear_stale_session():
+    # If there's no user ID in the session, clear the session
+    if 'user_id' not in session:
+        session.clear()
+
+@app.route('/logout', methods=['GET'])
+def logout_debug():
+    session.clear()  # Clear session for manual logout
+    return "Session cleared. You are logged out.", 200
 
 
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
-# New logout route that returns a JSON response
-@app.route('/api/logout')
+@app.route('/api/logout', methods=['POST'])
 def api_logout():
-    session.clear()  # Clears the session data
-    return jsonify({'success': True, 'message': 'You have been logged out successfully.'})
+    session.clear()  # Clears all session data
+    return jsonify({'success': True, 'message': 'Logged out successfully'})
 
+
+
+@app.route('/debug/session', methods=['GET'])
+def debug_session():
+    return jsonify(dict(session))  # View current session data
+
+@app.route('/debug/clear-session', methods=['GET'])
+def clear_session_debug():
+    session.clear()
+    return "Session cleared!", 200
 
 @app.route('/admin/dashboard', methods=['GET'])
 def admin_dashboard():
@@ -226,6 +265,7 @@ def admin_dashboard():
         'message': f'Welcome, Admin {user.name}',
         'data': 'Admin-specific dashboard data here...'
     })
+
 
 # @app.route('/sponsor/dashboard', methods=['GET'])
 # def sponsor_dashboard():
@@ -261,6 +301,41 @@ def admin_dashboard():
 #         'applied_campaigns': campaign_list
 #     })
 
+@app.route('/sponsor/dashboard', methods=['GET'])
+def sponsor_dashboard():
+    if 'user_id' not in session or 'role' not in session:
+        return redirect(url_for('index'))
+
+    user = User.query.get(session['user_id'])
+    if not user or user.role != 'sponsor':
+        return redirect(url_for('index'))  # Redirect unauthorized users
+
+    # Example sponsor-specific data
+    campaigns = [{"id": 1, "name": "Campaign A", "budget": 1000},
+                 {"id": 2, "name": "Campaign B", "budget": 2000}]
+
+    return jsonify({
+        'message': f'Welcome, Sponsor {user.name}',
+        'campaigns': campaigns
+    })
+
+@app.route('/influencer/dashboard', methods=['GET'])
+def influencer_dashboard():
+    if 'user_id' not in session or 'role' not in session:
+        return redirect(url_for('index'))
+
+    user = User.query.get(session['user_id'])
+    if not user or user.role != 'influencer':
+        return redirect(url_for('index'))  # Redirect unauthorized users
+
+    # Example influencer-specific data
+    applied_campaigns = [{"id": 1, "name": "Campaign A", "status": "Approved"},
+                         {"id": 2, "name": "Campaign B", "status": "Pending"}]
+
+    return jsonify({
+        'message': f'Welcome, Influencer {user.name}',
+        'applied_campaigns': applied_campaigns
+    })
 
 
 
