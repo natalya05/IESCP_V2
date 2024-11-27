@@ -1,6 +1,7 @@
 
 Vue.component('admin-dashboard', {
     template: '#admin-dashboard',
+    delimiters: ['[[', ']]'],
     data() {
         return {
             users: [], // List of users
@@ -79,6 +80,7 @@ Vue.component('admin-dashboard', {
 // Sponsor Dashboard Component
 Vue.component('sponsor-dashboard', {
     template: '#sponsor-dashboard',
+    delimiters: ['[[', ']]'],
     data() {
         return {
             user: '', // Logged-in sponsor's name
@@ -321,6 +323,7 @@ Vue.component('sponsor-dashboard', {
 // Influencer Dashboard Component
 Vue.component('influencer-dashboard', {
     template: '#influencer-dashboard',
+    delimiters: ['[[', ']]'],
     data() {
         return {
             user: '', // Influencer's name
@@ -391,7 +394,6 @@ Vue.component('influencer-dashboard', {
 });
 
 
-
 new Vue({
     el: '#app',
     delimiters: ['[[', ']]'],
@@ -406,7 +408,8 @@ new Vue({
         registerError: '',
         registerSuccess: '',
         role: '', // Tracks the role of the logged-in user
-        isLoading: false // Tracks if an action is in progress
+        isLoading: false, // Tracks if an action is in progress
+        message:'Welcome to Influencer Engagement and Sponsorship Coordination Platform'
     },
     methods: {
         showLoginForm() {
