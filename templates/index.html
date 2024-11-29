@@ -36,10 +36,14 @@
         </div>
 
         <!-- Register Form -->
-        <!-- Register Form -->
         <div v-if="isRegisterVisible">
             <h2>Register</h2>
             <form @submit.prevent="handleRegister">
+                <div>
+                    <label for="register-email">Email:</label>
+                    <input type="email" id="register-email" v-model="registerEmail" required>
+                </div>
+                
                 <div>
                     <label for="register-username">Username:</label>
                     <input type="text" id="register-username" v-model="registerUsername" required>
@@ -63,18 +67,16 @@
             <p>Already have an account? <button @click="showLoginForm">Login</button></p>
         </div>
 
-        <!-- Role-based Dashboard -->
         <admin-dashboard v-if="role === 'admin'"></admin-dashboard>
         <sponsor-dashboard v-if="role === 'sponsor'"></sponsor-dashboard>
         <influencer-dashboard v-if="role === 'influencer'"></influencer-dashboard>
 
-        <!-- Unauthorized Message -->
+       
         <p v-if="!role && !isLoading">Please log in to access the platform.</p>
 
         
     </div>
 
-    <!-- Vue Components Templates -->
     <script type="text/x-template" id="admin-dashboard">
         <div>
             <h1>Welcome to Admin Dashboard</h1>

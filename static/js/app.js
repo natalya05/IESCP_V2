@@ -463,7 +463,8 @@ new Vue({
             axios.post('/register', {
                 name: this.registerUsername,
                 password: this.registerPassword,
-                role: this.selectedRole 
+                role: this.selectedRole,
+                email: this.registerEmail,
             })
                 .then(response => {
                     if (response.data.success) {

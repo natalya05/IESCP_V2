@@ -1,7 +1,7 @@
-from flask import Flask, render_template,jsonify,request,redirect,url_for,session, send_file
+from flask import Flask, render_template,jsonify,request,redirect,url_for,session, send_file, render_template_string
 from datetime import datetime
 from werkzeug.security import generate_password_hash
-from flask_login import login_user , current_user
+# from flask_login import login_user , current_user
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import generate_password_hash
@@ -11,6 +11,12 @@ from celery_worker import make_celery
 import time
 from celery.result import AsyncResult
 from httplib2 import Http
+# from flask_mail import Message , Mail
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 # from celery.schedules import crontab
 
 
@@ -43,6 +49,7 @@ class Role(db.Model, RoleMixin):
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), unique=True, nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     fs_uniquifier = db.Column(db.String(64), unique=True, nullable=False, default=lambda: str(uuid4()))
     roles = db.relationship('Role', secondary=user_roles, backref=db.backref('users', lazy='dynamic'))
@@ -86,11 +93,10 @@ security = Security(app, user_datastore)
 
 def initialize_app(app):
     with app.app_context():
-        db.create_all()  # Create tables based on models
+        db.create_all() 
         if not User.query.filter_by(name='admin').first():
-            # Creating admin user
             hashed_password = generate_password_hash('password').decode('utf-8')
-            user = User(name='admin', password='password', role='admin')
+            user = User(name='admin', password=hashed_password, role='admin',email='admin@example.com',active=True)
             db.session.add(user)
             db.session.commit()
 
@@ -141,15 +147,12 @@ def generate_csv(user_id):
 def send_influencer_reminders():
     from json import dumps
     from datetime import datetime, timedelta
-
-    # Replace this with your actual webhook URL
     WEBHOOK_URL = "https://chat.googleapis.com/v1/spaces/AAAAWXGqUq8/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=lJGSYURmKTV6C3DYMnUv3Nt0kYg6HUJn6MeMc0piHBk"
 
     url = WEBHOOK_URL
     influencers = User.query.filter_by(role="influencer", active=True).all()
 
     for influencer in influencers:
-        # Check for pending ad requests
         pending_requests = AdRequest.query.filter_by(
             influencer_id=influencer.id, status='Pending'
         ).all()
@@ -173,21 +176,149 @@ def send_influencer_reminders():
             headers=message_headers,
             body=dumps(bot_message),
         )
-
-        # Print response for debugging
         print(f"Response for {influencer.name}: {response}")
 
     return "Reminders are being sent successfully!"
 
+SMPTP_SERVER_HOST="localhost"
+SMPTP_SERVER_PORT=1025
+SENDER_ADDRESS="admin@example.com"
+SENDER_PASSWORD=""
+
+# def send_email(to_address,subject,message,content="html",attachment_file=None):
+#     msg=MIMEMultipart()
+#     msg["From"]=SENDER_ADDRESS
+#     msg["To"]=to_address
+#     msg["Subject"]=subject
+#     if content=="html":      
+#         msg.attach(MIMEText(message,"html"))
+#     else:
+#         msg.attach(MIMEText(message,"plain"))
+        
+#     if attachment_file:
+#         with open(attachment_file,"rb") as attachment:
+            
+#             part =MIMEBase("application","octet-stream")
+#             part.set_payload(attachment.read())
+#             encoders.encode_base64(part)
+
+
+#     s=smtplib.SMTP(host=SMPTP_SERVER_HOST,port=SMPTP_SERVER_PORT)
+#     s.login(SENDER_ADDRESS,SENDER_PASSWORD)
+#     s.send_message(msg)
+#     s.quit()
+#     return True
+def send_email(to_address, subject, message, content="html", attachment_file=None):
+    msg = MIMEMultipart()
+    msg["From"] = SENDER_ADDRESS
+    msg["To"] = to_address
+    msg["Subject"] = subject
+
+    # Attach the email body based on the content type
+    if content == "html":
+        msg.attach(MIMEText(message, "html"))  # Use 'html' type for rendering HTML content
+    else:
+        msg.attach(MIMEText(message, "plain"))  # Use 'plain' type for plain text
+
+    # Add attachment if provided
+    if attachment_file:
+        with open(attachment_file, "rb") as attachment:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            # part.add_header(
+            #     "Content-Disposition",
+            #     f"attachment; filename={attachment_file.split('/')[-1]}",
+            # )
+            msg.attach(part)
+
+    # Send the email using SMTP
+    s = smtplib.SMTP(host=SMPTP_SERVER_HOST, port=SMPTP_SERVER_PORT)
+    s.login(SENDER_ADDRESS, SENDER_PASSWORD)
+    s.send_message(msg)
+    s.quit()
+
+    return True
+
+
+@celery.task()
+def send_reminer_via_email():
+    all_users = User.query.all()
+
+    for user in all_users:
+        campaigns = Campaign.query.filter_by(sponsor_id=user.id).all()
+        if campaigns:
+            email_content = render_template_string(
+                """
+                    <html>
+                    <head>
+                        <style>
+                            body {
+                                font-family: Arial, sans-serif;
+                            }
+                            h2 {
+                                color: #333;
+                            }
+                            ul {
+                                list-style-type: none;
+                                padding: 0;
+                            }
+                            li {
+                                margin-bottom: 10px;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h2>Your Recent Campaign Details</h2>
+                        <p>Hello {{ user.name }},</p>
+                        <p>Here are your recent campaigns:</p>
+                        <ul>
+                            {% for campaign in campaigns %}
+                                <li>
+                                    <strong>Campaign ID:</strong> {{ campaign.id }}<br>
+                                    <strong>Campaign Name:</strong> {{ campaign.name }}<br>
+                                    <strong>Start Date:</strong> {{ campaign.start_date }}<br>
+                                    <strong>End Date:</strong> {{ campaign.end_date }}<br>
+                                    <strong>Visibility:</strong> {{ campaign.visibility }}
+                                    <strong>Budget:</strong> {{ campaign.budget }}
+                                </li>
+                                <br>
+                            {% endfor %}
+                        </ul>
+                    </body>
+                    </html>
+                """,
+                user=user,
+                campaigns=campaigns,
+            )
+
+            send_email(
+                to_address=user.email,
+                subject="Your Recent Campaign Details",
+                message=email_content,
+                content="html",
+            )
+    
+    return "Reminder emails sent successfully"
+
+
+
+
+# @celery.on_after_configure.connect
+# def setup_periodic_tasks(sender, **kwargs):
+#     sender.add_periodic_task(10.0, send_influencer_reminders.s(), name='reminder sended')
 
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
-    sender.add_periodic_task(10.0, send_influencer_reminders.s(), name='reminder sended')
+    sender.add_periodic_task(
+        20,
+        send_reminer_via_email.s(),
+        name='send_reminder_every_20_seconds',
+    )
 
 
 @app.route("/trigger-celery-job")
 def trigger_celery_job():
-    # camp_id = Campaign.query.filter_by(user_id=1).all()
     user_id = session["user_id"]
     a=generate_csv.delay(user_id)
     return{
@@ -286,6 +417,7 @@ def register():
     name = data.get('name')
     password = data.get('password')
     role = data.get('role', 'influencer')
+    email= data.get('email')
 
     if not name or not password or not role:
         return jsonify({"error": "Name, password, and role are required"}), 400
@@ -295,7 +427,7 @@ def register():
         return jsonify({"error": "User already exists"}), 409
 
     hashed_password = generate_password_hash(password).decode('utf-8')
-    new_user = User(name=name, password=hashed_password, role=role)
+    new_user = User(name=name, password=hashed_password, role=role,email=email)
 
     db.session.add(new_user)
     db.session.commit()
