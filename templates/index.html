@@ -8,10 +8,11 @@
 </head>
 <body>
     <div id="app">
-        <h1>[[ message ]]</h1>
+       
 
         <!-- Login/Register Buttons -->
         <div v-if="!role && isLoginVisible">
+            <h2>[[ message ]]</h2>
             <button @click="showLoginForm">Login</button>
             <button @click="showRegisterForm">Register</button>
         </div>
@@ -195,6 +196,7 @@
             <!-- Welcome Section -->
             <h1>Welcome, Sponsor [[ user ]]!</h1>
             <button @click="logout" class="btn btn-danger">Logout</button>
+            <button @click="trigger_celery_job" class="btn btn-danger">Trigger celery job</button>
             
             <!-- Search Influencers Section -->
             <h2>Search Influencers</h2>

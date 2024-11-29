@@ -1,33 +1,32 @@
-# app.py
-from flask import Flask, render_template,jsonify,request,redirect,url_for,session
-# from models import User as UserModel, db, Role
-
-# from flask_security import Security, SQLAlchemyUserDatastore,roles_required, roles_accepted, login_required, UserMixin, RoleMixin
-# from api.resource import api, User
+from flask import Flask, render_template,jsonify,request,redirect,url_for,session, send_file
 from datetime import datetime
-
 from werkzeug.security import generate_password_hash
-
+from flask_login import login_user , current_user
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import generate_password_hash
 from flask_security import Security, SQLAlchemyUserDatastore, UserMixin, RoleMixin,roles_required,login_required
 from uuid import uuid4
+from celery_worker import make_celery
+import time
+from celery.result import AsyncResult
+from httplib2 import Http
+# from celery.schedules import crontab
 
-# Initialize Flask app
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['PROPAGATE_EXCEPTIONS'] = True  
 app.config['SECURITY_PASSWORD_SALT'] = 'your-security-salt'
-
 app.config['SECURITY_PASSWORD_SINGLE_HASH'] = True  # Default is True
 app.config['DEBUG'] = True
 app.config['SECURITY_PASSWORD_HASH'] = 'bcrypt'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Initialize extensions
+
 db = SQLAlchemy(app)
+
 
 # Define models
 user_roles = db.Table(
@@ -83,6 +82,8 @@ class AdRequest(db.Model):
 user_datastore = SQLAlchemyUserDatastore(db, User, Role)
 security = Security(app, user_datastore)
 
+
+
 def initialize_app(app):
     with app.app_context():
         db.create_all()  # Create tables based on models
@@ -95,6 +96,119 @@ def initialize_app(app):
 
 initialize_app(app)
 
+
+app.config.update(
+    CELERY_BROKER_URL='redis://localhost:6379',
+    CELERY_RESULT_BACKEND='redis://localhost:6379'
+)
+
+celery = make_celery(app) 
+
+@celery.task()
+def add_together(a, b):
+    time.sleep(5)
+    return a + b
+
+@celery.task()
+def generate_csv(user_id):
+    import csv
+    time.sleep(6)  
+
+    campaigns = Campaign.query.filter_by(sponsor_id=user_id).all()
+    fields = ["Campaign Name", "Description", "Start_Date", "End_Date", "Budget", "Visibility"]
+    rows = []
+
+    for campaign in campaigns:
+        print(f"Processing campaign: {campaign.name}") 
+        rows.append([
+            campaign.name,
+            campaign.description,
+            campaign.start_date,
+            campaign.end_date,
+            campaign.budget,
+            campaign.visibility
+        ])
+    print(rows)
+    csv_file_path = "static/data.csv"
+    with open(csv_file_path, "w") as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(fields)
+        csvwriter.writerows(rows)
+
+    return f"CSV file generated for user ID: {user_id}!"
+
+@celery.task
+def send_influencer_reminders():
+    from json import dumps
+    from datetime import datetime, timedelta
+
+    # Replace this with your actual webhook URL
+    WEBHOOK_URL = "https://chat.googleapis.com/v1/spaces/AAAAWXGqUq8/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=lJGSYURmKTV6C3DYMnUv3Nt0kYg6HUJn6MeMc0piHBk"
+
+    url = WEBHOOK_URL
+    influencers = User.query.filter_by(role="influencer", active=True).all()
+
+    for influencer in influencers:
+        # Check for pending ad requests
+        pending_requests = AdRequest.query.filter_by(
+            influencer_id=influencer.id, status='Pending'
+        ).all()
+
+        if not pending_requests:
+            # No ad requests
+            bot_message = {
+                'text': f"Hello {influencer.name}, you have no ad requests yet. Check out public campaigns on our site!"
+            }
+        else:
+            bot_message = {
+                'text': f"Hello {influencer.name}, you have pending ad requests. Check them out on our site!"
+            }
+
+        # Send the message via the webhook
+        message_headers = {'Content-Type': 'application/json; charset=UTF-8'}
+        http_obj = Http()
+        response = http_obj.request(
+            uri=url,
+            method='POST',
+            headers=message_headers,
+            body=dumps(bot_message),
+        )
+
+        # Print response for debugging
+        print(f"Response for {influencer.name}: {response}")
+
+    return "Reminders are being sent successfully!"
+
+
+@celery.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    sender.add_periodic_task(10.0, send_influencer_reminders.s(), name='reminder sended')
+
+
+@app.route("/trigger-celery-job")
+def trigger_celery_job():
+    # camp_id = Campaign.query.filter_by(user_id=1).all()
+    user_id = session["user_id"]
+    a=generate_csv.delay(user_id)
+    return{
+        "Task_id":a.id,
+        "Task_state":a.state,
+        "Task_result":a.result
+    }
+
+@app.route("/status/<int:id>")
+def check_status(id):
+    res=AsyncResult(id)
+    return{
+        "Task_id":res.id,
+        "Task_state":res.state,
+        "Task_result":res.result
+    }
+
+@app.route("/download-file")
+def download_file():
+    time.sleep(5)
+    return send_file("static/data.csv")
 
 @app.route('/')
 def index():
@@ -208,6 +322,7 @@ def api_login():
         role_list = [role.name for role in user.roles] if user.roles else [user.role]
         session['user_id'] = user.id
         session['role'] = role_list[0]  # Store role in session
+        print(session['user_id'])
 
         return jsonify({
             'success': True,

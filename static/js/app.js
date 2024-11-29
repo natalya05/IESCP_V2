@@ -313,6 +313,14 @@ Vue.component('sponsor-dashboard', {
                     this.flashMessage = 'Failed to delete ad request. Please try again.';
                 });
         },
+        trigger_celery_job: function () {
+            fetch("/trigger-celery-job").then(r=> r.json()
+            ).then(d=>{
+                console.log("celery task details:",d);
+                window.location.href= "/download-file"
+              
+            })
+        },
         logout() {
             this.$root.logout(); // Use root's logout method
         }
