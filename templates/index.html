@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <title>Flask with Vue.js</title>
 </head>
 <body>
     <div id="app">
-        <h1>{{ message }}</h1>
+       
 
         <!-- Login/Register Buttons -->
         <div v-if="!role && isLoginVisible">
+            <h2>[[ message ]]</h2>
             <button @click="showLoginForm">Login</button>
             <button @click="showRegisterForm">Register</button>
         </div>
@@ -27,17 +29,21 @@
                     <label for="login-password">Password:</label>
                     <input type="password" id="login-password" v-model="loginPassword" required>
                 </div>
-                <p v-if="loginError" class="error">{{ loginError }}</p>
+                <p v-if="loginError" class="error">[[ loginError ]]</p>
                 <button type="submit">Login</button>
             </form>
             <p>Don't have an account? <button @click="showRegisterForm">Create New Account</button></p>
         </div>
 
         <!-- Register Form -->
-        <!-- Register Form -->
         <div v-if="isRegisterVisible">
             <h2>Register</h2>
             <form @submit.prevent="handleRegister">
+                <div>
+                    <label for="register-email">Email:</label>
+                    <input type="email" id="register-email" v-model="registerEmail" required>
+                </div>
+                
                 <div>
                     <label for="register-username">Username:</label>
                     <input type="text" id="register-username" v-model="registerUsername" required>
@@ -58,24 +64,24 @@
                 <p v-if="registerSuccess" class="success">[[ registerSuccess ]]</p>
                 <button type="submit" :disabled="isLoading">Register</button>
             </form>
+            <p>Already have an account? <button @click="showLoginForm">Login</button></p>
         </div>
 
-        <!-- Role-based Dashboard -->
         <admin-dashboard v-if="role === 'admin'"></admin-dashboard>
         <sponsor-dashboard v-if="role === 'sponsor'"></sponsor-dashboard>
         <influencer-dashboard v-if="role === 'influencer'"></influencer-dashboard>
 
-        <!-- Unauthorized Message -->
+       
         <p v-if="!role && !isLoading">Please log in to access the platform.</p>
 
         
     </div>
 
-    <!-- Vue Components Templates -->
     <script type="text/x-template" id="admin-dashboard">
         <div>
-            <h1>Admin Dashboard</h1>
+            <h1>Welcome to Admin Dashboard</h1>
             <p>Manage platform-wide operations here.</p>
+            <button @click="logout" class="btn btn-danger mt-2">Logout</button>
     
             <!-- Error Message -->
             <p v-if="error" class="text-danger">[[ error ]]</p>
@@ -182,11 +188,8 @@
                     </tr>
                 </tbody>
             </table>
-    
-            <!-- Logout Button -->
-            <button @click="logout" class="btn btn-danger mt-3">Logout</button>
         </div>
-    </script>
+    </script>  
     
     
 
@@ -195,6 +198,7 @@
             <!-- Welcome Section -->
             <h1>Welcome, Sponsor [[ user ]]!</h1>
             <button @click="logout" class="btn btn-danger">Logout</button>
+            <button @click="trigger_celery_job" class="btn btn-danger">Trigger celery job</button>
             
             <!-- Search Influencers Section -->
             <h2>Search Influencers</h2>
@@ -435,8 +439,8 @@
                             <th>Payment Amount</th>
                             <th>Status</th>
                             <th>Messages</th>
-                            <th>Actions</th>
-                        </tr>
+                            <th>Actions</th> 
+                        </tr> 
                     </thead>
                     <tbody>
                         <tr v-for="request in adRequests" :key="request.id">

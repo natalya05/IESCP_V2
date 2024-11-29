@@ -1,33 +1,38 @@
-# app.py
-from flask import Flask, render_template,jsonify,request,redirect,url_for,session
-# from models import User as UserModel, db, Role
-
-# from flask_security import Security, SQLAlchemyUserDatastore,roles_required, roles_accepted, login_required, UserMixin, RoleMixin
-# from api.resource import api, User
+from flask import Flask, render_template,jsonify,request,redirect,url_for,session, send_file, render_template_string
 from datetime import datetime
-
 from werkzeug.security import generate_password_hash
-
+# from flask_login import login_user , current_user
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import generate_password_hash
 from flask_security import Security, SQLAlchemyUserDatastore, UserMixin, RoleMixin,roles_required,login_required
 from uuid import uuid4
+from celery_worker import make_celery
+import time
+from celery.result import AsyncResult
+from httplib2 import Http
+# from flask_mail import Message , Mail
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+# from celery.schedules import crontab
 
-# Initialize Flask app
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['PROPAGATE_EXCEPTIONS'] = True  
 app.config['SECURITY_PASSWORD_SALT'] = 'your-security-salt'
-
 app.config['SECURITY_PASSWORD_SINGLE_HASH'] = True  # Default is True
 app.config['DEBUG'] = True
 app.config['SECURITY_PASSWORD_HASH'] = 'bcrypt'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Initialize extensions
+
 db = SQLAlchemy(app)
+
 
 # Define models
 user_roles = db.Table(
@@ -44,6 +49,7 @@ class Role(db.Model, RoleMixin):
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), unique=True, nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     fs_uniquifier = db.Column(db.String(64), unique=True, nullable=False, default=lambda: str(uuid4()))
     roles = db.relationship('Role', secondary=user_roles, backref=db.backref('users', lazy='dynamic'))
@@ -83,18 +89,257 @@ class AdRequest(db.Model):
 user_datastore = SQLAlchemyUserDatastore(db, User, Role)
 security = Security(app, user_datastore)
 
+
+
 def initialize_app(app):
     with app.app_context():
-        db.create_all()  # Create tables based on models
+        db.create_all() 
         if not User.query.filter_by(name='admin').first():
-            # Creating admin user
             hashed_password = generate_password_hash('password').decode('utf-8')
-            user = User(name='admin', password='password', role='admin')
+            user = User(name='admin', password=hashed_password, role='admin',email='admin@example.com',active=True)
             db.session.add(user)
             db.session.commit()
 
 initialize_app(app)
 
+
+app.config.update(
+    CELERY_BROKER_URL='redis://localhost:6379',
+    CELERY_RESULT_BACKEND='redis://localhost:6379'
+)
+
+celery = make_celery(app) 
+
+@celery.task()
+def add_together(a, b):
+    time.sleep(5)
+    return a + b
+
+@celery.task()
+def generate_csv(user_id):
+    import csv
+    time.sleep(6)  
+
+    campaigns = Campaign.query.filter_by(sponsor_id=user_id).all()
+    fields = ["Campaign Name", "Description", "Start_Date", "End_Date", "Budget", "Visibility"]
+    rows = []
+
+    for campaign in campaigns:
+        print(f"Processing campaign: {campaign.name}") 
+        rows.append([
+            campaign.name,
+            campaign.description,
+            campaign.start_date,
+            campaign.end_date,
+            campaign.budget,
+            campaign.visibility
+        ])
+    print(rows)
+    csv_file_path = "static/data.csv"
+    with open(csv_file_path, "w") as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(fields)
+        csvwriter.writerows(rows)
+
+    return f"CSV file generated for user ID: {user_id}!"
+
+@celery.task
+def send_influencer_reminders():
+    from json import dumps
+    from datetime import datetime, timedelta
+    WEBHOOK_URL = "https://chat.googleapis.com/v1/spaces/AAAAWXGqUq8/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=lJGSYURmKTV6C3DYMnUv3Nt0kYg6HUJn6MeMc0piHBk"
+
+    url = WEBHOOK_URL
+    influencers = User.query.filter_by(role="influencer", active=True).all()
+
+    for influencer in influencers:
+        pending_requests = AdRequest.query.filter_by(
+            influencer_id=influencer.id, status='Pending'
+        ).all()
+
+        if not pending_requests:
+            # No ad requests
+            bot_message = {
+                'text': f"Hello {influencer.name}, you have no ad requests yet. Check out public campaigns on our site!"
+            }
+        else:
+            bot_message = {
+                'text': f"Hello {influencer.name}, you have pending ad requests. Check them out on our site!"
+            }
+
+        # Send the message via the webhook
+        message_headers = {'Content-Type': 'application/json; charset=UTF-8'}
+        http_obj = Http()
+        response = http_obj.request(
+            uri=url,
+            method='POST',
+            headers=message_headers,
+            body=dumps(bot_message),
+        )
+        print(f"Response for {influencer.name}: {response}")
+
+    return "Reminders are being sent successfully!"
+
+SMPTP_SERVER_HOST="localhost"
+SMPTP_SERVER_PORT=1025
+SENDER_ADDRESS="admin@example.com"
+SENDER_PASSWORD=""
+
+# def send_email(to_address,subject,message,content="html",attachment_file=None):
+#     msg=MIMEMultipart()
+#     msg["From"]=SENDER_ADDRESS
+#     msg["To"]=to_address
+#     msg["Subject"]=subject
+#     if content=="html":      
+#         msg.attach(MIMEText(message,"html"))
+#     else:
+#         msg.attach(MIMEText(message,"plain"))
+        
+#     if attachment_file:
+#         with open(attachment_file,"rb") as attachment:
+            
+#             part =MIMEBase("application","octet-stream")
+#             part.set_payload(attachment.read())
+#             encoders.encode_base64(part)
+
+
+#     s=smtplib.SMTP(host=SMPTP_SERVER_HOST,port=SMPTP_SERVER_PORT)
+#     s.login(SENDER_ADDRESS,SENDER_PASSWORD)
+#     s.send_message(msg)
+#     s.quit()
+#     return True
+def send_email(to_address, subject, message, content="html", attachment_file=None):
+    msg = MIMEMultipart()
+    msg["From"] = SENDER_ADDRESS
+    msg["To"] = to_address
+    msg["Subject"] = subject
+
+    # Attach the email body based on the content type
+    if content == "html":
+        msg.attach(MIMEText(message, "html"))  # Use 'html' type for rendering HTML content
+    else:
+        msg.attach(MIMEText(message, "plain"))  # Use 'plain' type for plain text
+
+    # Add attachment if provided
+    if attachment_file:
+        with open(attachment_file, "rb") as attachment:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            # part.add_header(
+            #     "Content-Disposition",
+            #     f"attachment; filename={attachment_file.split('/')[-1]}",
+            # )
+            msg.attach(part)
+
+    # Send the email using SMTP
+    s = smtplib.SMTP(host=SMPTP_SERVER_HOST, port=SMPTP_SERVER_PORT)
+    s.login(SENDER_ADDRESS, SENDER_PASSWORD)
+    s.send_message(msg)
+    s.quit()
+
+    return True
+
+
+@celery.task()
+def send_reminer_via_email():
+    all_users = User.query.all()
+
+    for user in all_users:
+        campaigns = Campaign.query.filter_by(sponsor_id=user.id).all()
+        if campaigns:
+            email_content = render_template_string(
+                """
+                    <html>
+                    <head>
+                        <style>
+                            body {
+                                font-family: Arial, sans-serif;
+                            }
+                            h2 {
+                                color: #333;
+                            }
+                            ul {
+                                list-style-type: none;
+                                padding: 0;
+                            }
+                            li {
+                                margin-bottom: 10px;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h2>Your Recent Campaign Details</h2>
+                        <p>Hello {{ user.name }},</p>
+                        <p>Here are your recent campaigns:</p>
+                        <ul>
+                            {% for campaign in campaigns %}
+                                <li>
+                                    <strong>Campaign ID:</strong> {{ campaign.id }}<br>
+                                    <strong>Campaign Name:</strong> {{ campaign.name }}<br>
+                                    <strong>Start Date:</strong> {{ campaign.start_date }}<br>
+                                    <strong>End Date:</strong> {{ campaign.end_date }}<br>
+                                    <strong>Visibility:</strong> {{ campaign.visibility }}
+                                    <strong>Budget:</strong> {{ campaign.budget }}
+                                </li>
+                                <br>
+                            {% endfor %}
+                        </ul>
+                    </body>
+                    </html>
+                """,
+                user=user,
+                campaigns=campaigns,
+            )
+
+            send_email(
+                to_address=user.email,
+                subject="Your Recent Campaign Details",
+                message=email_content,
+                content="html",
+            )
+    
+    return "Reminder emails sent successfully"
+
+
+
+
+# @celery.on_after_configure.connect
+# def setup_periodic_tasks(sender, **kwargs):
+#     sender.add_periodic_task(10.0, send_influencer_reminders.s(), name='reminder sended')
+
+@celery.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    sender.add_periodic_task(
+        20,
+        send_reminer_via_email.s(),
+        name='send_reminder_every_20_seconds',
+    )
+
+
+@app.route("/trigger-celery-job")
+def trigger_celery_job():
+    user_id = session["user_id"]
+    a=generate_csv.delay(user_id)
+    return{
+        "Task_id":a.id,
+        "Task_state":a.state,
+        "Task_result":a.result
+    }
+
+@app.route("/status/<int:id>")
+def check_status(id):
+    res=AsyncResult(id)
+    return{
+        "Task_id":res.id,
+        "Task_state":res.state,
+        "Task_result":res.result
+    }
+
+@app.route("/download-file")
+def download_file():
+    time.sleep(5)
+    return send_file("static/data.csv")
 
 @app.route('/')
 def index():
@@ -108,10 +353,6 @@ def get_message():
     }
     return jsonify(data)
 
-# @app.route('/campaigns')
-# def campaigns():
-#     campaigns = Campaign.query.all()
-#     return render_template('campaign.html', campaigns=campaigns)
 @app.route('/api/campaigns')
 def api_campaigns():
     campaigns = Campaign.query.all()
@@ -150,12 +391,6 @@ def create_campaign():
     except Exception as e:
         return jsonify({'error': f'Failed to create campaign: {str(e)}'}), 400
 
-
-# @app.route('/ad_requests')
-# def ad_requests():
-#     ad_requests = AdRequest.query.all()
-#     return render_template('ad_request.html', ad_requests=ad_requests)
-
 @app.route('/api/ad_requests')
 def api_ad_requests():
     # Query all ad requests and convert them to a dictionary or list format
@@ -182,6 +417,7 @@ def register():
     name = data.get('name')
     password = data.get('password')
     role = data.get('role', 'influencer')
+    email= data.get('email')
 
     if not name or not password or not role:
         return jsonify({"error": "Name, password, and role are required"}), 400
@@ -191,36 +427,12 @@ def register():
         return jsonify({"error": "User already exists"}), 409
 
     hashed_password = generate_password_hash(password).decode('utf-8')
-    new_user = User(name=name, password=hashed_password, role=role)
+    new_user = User(name=name, password=hashed_password, role=role,email=email)
 
     db.session.add(new_user)
     db.session.commit()
 
     return jsonify({"success": True, "message": "User registered successfully"}), 201
-
-
-# @app.route('/api/login', methods=['POST'])
-# def api_login():
-#     name = request.json.get('name')
-#     password = request.json.get('password')
-
-#     user = User.query.filter_by(name=name).first()
-
-#     if user and user.verify_and_update_password(password):
-#         role_list = [role.name for role in user.roles] if user.roles else [user.role]
-#         role = role_list[0]
-
-#         session['user_id'] = user.id
-#         session['role'] = role
-
-#         return jsonify({
-#             'success': True,
-#             'user_id': user.id,
-#             'user_name': user.name,
-#             'role': role_list
-#         })
-
-#     return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
 
 
 @app.route('/api/user-role', methods=['GET'])
@@ -242,6 +454,7 @@ def api_login():
         role_list = [role.name for role in user.roles] if user.roles else [user.role]
         session['user_id'] = user.id
         session['role'] = role_list[0]  # Store role in session
+        print(session['user_id'])
 
         return jsonify({
             'success': True,
@@ -259,12 +472,6 @@ def clear_stale_session():
     if 'user_id' not in session:
         session.clear()
 
-@app.route('/logout', methods=['GET'])
-def logout_debug():
-    session.clear()  # Clear session for manual logout
-    return "Session cleared. You are logged out.", 200
-
-
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
     session.clear()  # Clears all session data
@@ -280,22 +487,6 @@ def debug_session():
 def clear_session_debug():
     session.clear()
     return "Session cleared!", 200
-
-# @app.route('/admin/dashboard', methods=['GET'])
-# def admin_dashboard():
-
-#     print("Session data:", session)
-#     if 'user_id' not in session or 'role' not in session:
-#         return redirect(url_for('login'))
-#     user = User.query.get(session['user_id'])
-
-#     if not user or 'Admin' not in [role.name for role in user.roles]:
-#         return redirect(url_for('index'))  # Redirect unauthorized users
-
-#     return jsonify({
-#         'message': f'Welcome, Admin {user.name}',
-#         'data': 'Admin-specific dashboard data here...'
-#     })
 
 @app.route('/admin/dashboard', methods=['GET'])
 def admin_dashboard():
@@ -355,120 +546,6 @@ def admin_dashboard():
         'campaigns': campaigns_data,
         'ad_requests': ad_requests_data
     })
-
-
-
-# @app.route("/sponsor_dashboard", methods=["GET", "POST"])
-# def sponsor_dashboard():
-#     if 'user_id' not in session:
-#         return jsonify({'error': 'User not logged in'}), 401  # Return 401 if user is not logged in
-
-#     user_id = session['user_id']  # Get the sponsor's user ID from the session
-#     user = User.query.get(user_id)
-
-#     if not user or user.role != 'sponsor':
-#         return jsonify({'error': 'Access denied. Only sponsors can access this page.'}), 403  # Return 403 if not a sponsor
-
-#     if request.method == 'POST':
-#         # Handle campaign creation
-#         try:
-#             data = request.get_json()  # Parse JSON data
-#             name = data.get('name')
-#             description = data.get('description')
-#             start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d')
-#             end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%d')
-#             budget = float(data.get('budget'))
-#             # ind_pay = float(data.get('ind_pay'))
-#             visibility = data.get('visibility')
-#             goals = data.get('goals')
-
-#             new_campaign = Campaign(
-#                 name=name,
-#                 description=description,
-#                 start_date=start_date,
-#                 end_date=end_date,
-#                 budget=budget,
-#                 # ind_pay=ind_pay,
-#                 visibility=visibility,
-#                 goals=goals,
-#                 sponsor_id=user_id
-#             )
-
-#             db.session.add(new_campaign)
-#             db.session.commit()
-
-#             return jsonify({'message': 'Campaign created successfully'}), 201
-#         except Exception as e:
-#             return jsonify({'error': f'Failed to create campaign: {str(e)}'}), 400
-
-#     # Handle GET request
-#     search_query = request.args.get('search_query', '')
-#     if search_query:
-#         search_results = User.query.filter(
-#             User.role == 'influencer', 
-#             User.name.ilike(f'%{search_query}%')
-#         ).all()
-#     else:
-#         search_results = []
-
-#     influencers = User.query.filter_by(role='influencer').all()
-#     campaigns = Campaign.query.filter_by(sponsor_id=user_id).all()
-#     all_req = AdRequest.query.all()  # Fetch all ad requests
-#     # influencer_requests = req_from_inf.query.all() 
-#     # Prepare data for JSON response
-#     campaigns_data = [{
-#         'id': campaign.id,
-#         'name': campaign.name,
-#         'description': campaign.description,
-#         'start_date': campaign.start_date.strftime('%Y-%m-%d'),
-#         'end_date': campaign.end_date.strftime('%Y-%m-%d'),
-#         'budget': campaign.budget,
-#         # 'ind_pay': campaign.ind_pay,
-#         'visibility': campaign.visibility,
-#         'goals': campaign.goals
-#     } for campaign in campaigns]
-
-#     influencers_data = [{
-#         'id': influencer.id,
-#         'name': influencer.name
-#     } for influencer in influencers]
-
-#     search_results_data = [{
-#         'id': influencer.id,
-#         'name': influencer.name
-#     } for influencer in search_results]
-
-#     all_req_data = [{
-#         'id': req.id,
-#         'requirements': req.requirements,
-#         'payment_amount': req.payment_amount,
-#         'status': req.status,
-#         'campaign_id': req.campaign_id,
-#         'influencer_id': req.influencer_id
-#     } for req in all_req]
-
-#     # influencer_requests_data = [{
-#     #     'ad_request_id': req.ad_request_id,
-#     #     'req_amount': req.req_amount,
-#     #     'campaign': {
-#     #         'id': req.ad_request.campaign_id,
-#     #         'name': req.ad_request.campaign.name
-#     #     },
-#     #     'influencer': {
-#     #         'id': req.ad_request.influencer_id,
-#     #         'name': req.ad_request.influencer.name
-#     #     },
-#     #     'status': req.ad_request.status
-#     # } for req in influencer_requests]
-
-#     return jsonify({
-#         'user': user.name,
-#         'campaigns': campaigns_data,
-#         'influencers': influencers_data,
-#         'all_ad_requests': all_req_data,
-#         # 'influencer_requests': influencer_requests_data,
-#         'search_results': search_results_data
-#     })
 
 @app.route("/sponsor_dashboard", methods=["GET", "POST"])
 def sponsor_dashboard():
@@ -567,144 +644,6 @@ def sponsor_dashboard():
         'search_results': search_results_data
     })
 
-
-
-# @app.route('/influencer/dashboard', methods=["GET", "POST"])
-# def influencer_dashboard():
-#     if 'user_id' not in session:
-#         return redirect(url_for('login'))  # Redirect to login if user is not logged in
-
-#     user_id = session['user_id']  # Retrieve the user ID from the session
-
-#     # Fetch ad requests where the influencer_id matches the logged-in user's ID
-#     ad_requests = AdRequest.query.filter_by(influencer_id=user_id).all()
-#     public_campaigns = Campaign.query.filter_by(visibility="public").all()
-
-#     # Logic to handle ad request creation for public campaigns
-#     if request.method == 'POST':
-#         campaign_id = request.form.get('campaign_id')
-#         requirements = request.form.get('requirements')
-#         payment_amount = request.form.get('payment_amount')
-
-#         new_ad_request = AdRequest(
-#             requirements=requirements,
-#             payment_amount=float(payment_amount),
-#             status='Pending',
-#             campaign_id=int(campaign_id),
-#             influencer_id=user_id
-#         )
-
-#         db.session.add(new_ad_request)
-#         db.session.commit()
-
-#         return redirect(url_for('influencer_dashboard'))
-    
-#     user = User.query.get(session['user_id'])
-
-#     if user.role != 'Influencer':
-#         return redirect(url_for('index'))  # Redirect to index if not an influencer
-
-#     user_name = session.get('user_name')
-
-#     # Prepare the data for the Vue.js frontend
-#     ad_requests_data = []
-#     for ad in ad_requests:
-#         ad_data = {
-#             'id': ad.id,
-#             'requirements': ad.requirements or '',
-#             'payment_amount': ad.payment_amount or 0.0,
-#             'status': ad.status or 'Pending',
-#             'campaign': {
-#                 'id': ad.campaign.id if ad.campaign else None,
-#                 'name': ad.campaign.name if ad.campaign else 'N/A',
-#                 'visibility': ad.campaign.visibility if ad.campaign else 'N/A',
-#             },
-#             'messages': ad.messages or ''
-#         }
-#         ad_requests_data.append(ad_data)
-
-#     print("Ad Requests Data:", ad_requests_data)
-
-#     public_campaigns_data = [{
-#         'id': camp.id,
-#         'name': camp.name,
-#         'description': camp.description,
-#         'ind_pay': camp.budget,  # Assuming 'ind_pay' is equivalent to budget
-#         'start_date': camp.start_date,
-#         'end_date': camp.end_date,
-#     } for camp in public_campaigns]
-
-#     # Return JSON response
-#     return jsonify({
-#         'user': user_name,
-#         'ad_requests': ad_requests_data,
-#         'public_campaigns': public_campaigns_data
-#     })
-
-# @app.route('/influencer/dashboard', methods=["GET", "POST"])
-# def influencer_dashboard():
-#     if 'user_id' not in session:
-#         return redirect(url_for('login'))  # Redirect to login if user is not logged in
-
-#     user_id = session['user_id']  # Retrieve the user ID from the session
-#     user = User.query.get(user_id)
-
-#     if not user or user.role != 'Influencer':
-#         return redirect(url_for('index'))  # Redirect if not an influencer or user doesn't exist
-
-#     # Fetch ad requests where the influencer_id matches the logged-in user's ID
-#     ad_requests = AdRequest.query.filter_by(influencer_id=user_id).all()
-#     public_campaigns = Campaign.query.filter_by(visibility="public").all()
-
-#     if request.method == 'POST':
-#         campaign_id = request.form.get('campaign_id')
-#         requirements = request.form.get('requirements')
-#         payment_amount = request.form.get('payment_amount')
-
-#         if campaign_id and requirements and payment_amount:
-#             new_ad_request = AdRequest(
-#                 requirements=requirements,
-#                 payment_amount=float(payment_amount),
-#                 status='Pending',
-#                 campaign_id=int(campaign_id),
-#                 influencer_id=user_id
-#             )
-#             db.session.add(new_ad_request)
-#             db.session.commit()
-#         else:
-#             return jsonify({"error": "All fields are required."}), 400
-
-#         return redirect(url_for('influencer_dashboard'))
-
-#     # Prepare the ad request data
-#     ad_requests_data = [{
-#         'id': ad.id,
-#         'requirements': ad.requirements or '',
-#         'payment_amount': ad.payment_amount or 0.0,
-#         'status': ad.status or 'Pending',
-#         'messages': ad.messages or '',
-#         'campaign': {
-#             'id': ad.campaign.id if ad.campaign else None,
-#             'name': ad.campaign.name if ad.campaign else 'N/A',
-#             'visibility': ad.campaign.visibility if ad.campaign else 'N/A',
-#         }
-#     } for ad in ad_requests]
-
-#     # Prepare the public campaign data
-#     public_campaigns_data = [{
-#         'id': camp.id,
-#         'name': camp.name,
-#         'description': camp.description,
-#         'budget': camp.budget,  # Changed to match Vue.js usage
-#         'start_date': camp.start_date.isoformat(),
-#         'end_date': camp.end_date.isoformat(),
-#     } for camp in public_campaigns]
-
-#     return jsonify({
-#         'user': user.name,
-#         'ad_requests': ad_requests_data,
-#         'public_campaigns': public_campaigns_data
-#     })
 @app.route('/influencer/dashboard', methods=["GET", "POST"])
 def influencer_dashboard():
     if 'user_id' not in session:
@@ -793,74 +732,6 @@ def search_campaigns():
     } for campaign in campaigns]
 
     return jsonify({'campaigns': campaigns_data})
-
-@app.route("/accept", methods=["POST"])
-def accept():
-    if 'user_id' not in session:
-        return jsonify({'error': 'User not logged in'}), 401  # Return 401 if user is not logged in
-
-    data = request.get_json()  # Get JSON data from the request
-    ad_req_id = data.get("ad_request_id")
-    status = data.get("status")
-
-    if not ad_req_id or not status:
-        return jsonify({'error': 'Missing ad_request_id or status'}), 400  # Return 400 if data is missing
-
-    # Query the ad_request by id
-    ad_request = AdRequest.query.get(ad_req_id)
-
-    if ad_request:
-        # Update the status of the ad_request
-        ad_request.status = status
-
-        # Save the changes to the database
-        db.session.commit()
-
-        return jsonify({
-            'message': f'Ad request {ad_req_id} status updated to {status}.',
-            'ad_request': {
-                'id': ad_request.id,
-                'status': ad_request.status,
-                'campaign_id': ad_request.campaign_id,
-                'influencer_id': ad_request.influencer_id
-            }
-        }), 200
-    else:
-        return jsonify({'error': f'Ad request with ID {ad_req_id} not found.'}), 404
-
-@app.route("/reject", methods=["POST"])
-def reject():
-    if 'user_id' not in session:
-        return jsonify({'error': 'User not logged in'}), 401  # Return 401 if user is not logged in
-
-    data = request.get_json()  # Parse JSON data from the request
-    ad_req_id = data.get("ad_request_id")
-    status = data.get("status")
-
-    if not ad_req_id or not status:
-        return jsonify({'error': 'Missing ad_request_id or status'}), 400  # Return 400 if data is missing
-
-    # Query the ad_request by id
-    ad_request = AdRequest.query.get(ad_req_id)
-
-    if ad_request:
-        # Update the status of the ad_request
-        ad_request.status = status
-
-        # Save the changes to the database
-        db.session.commit()
-
-        return jsonify({
-            'message': f'Ad request {ad_req_id} status updated to {status}.',
-            'ad_request': {
-                'id': ad_request.id,
-                'status': ad_request.status,
-                'campaign_id': ad_request.campaign_id,
-                'influencer_id': ad_request.influencer_id
-            }
-        }), 200
-    else:
-        return jsonify({'error': f'Ad request with ID {ad_req_id} not found.'}), 404
     
 @app.route("/update_ad_request_status", methods=["POST"])
 def update_ad_request_status():
@@ -1230,8 +1101,6 @@ def delete_user(user_id):
     db.session.commit()
 
     return jsonify({'message': 'User and associated data deleted successfully.', 'status': 'success'}), 200  
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
