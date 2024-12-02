@@ -9,15 +9,12 @@
 <body>
     <div id="app">
        
-
-        <!-- Login/Register Buttons -->
         <div v-if="!role && isLoginVisible">
             <h2>[[ message ]]</h2>
             <button @click="showLoginForm">Login</button>
             <button @click="showRegisterForm">Register</button>
         </div>
 
-        <!-- Login Form -->
         <div v-if="isLoginVisible">
             <h2>Login</h2>
             <form @submit.prevent="handleLogin">
@@ -35,7 +32,6 @@
             <p>Don't have an account? <button @click="showRegisterForm">Create New Account</button></p>
         </div>
 
-        <!-- Register Form -->
         <div v-if="isRegisterVisible">
             <h2>Register</h2>
             <form @submit.prevent="handleRegister">
@@ -83,11 +79,38 @@
             <p>Manage platform-wide operations here.</p>
             <button @click="logout" class="btn btn-danger mt-2">Logout</button>
     
-            <!-- Error Message -->
             <p v-if="error" class="text-danger">[[ error ]]</p>
+
+            <div>
+                <h3>Sponsor waiting for approval</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Approval</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="sponsor in sponsors" :key="sponsor.id">
+                            <td>[[ sponsor.id ]]</td>
+                            <td>[[ sponsor.name ]]</td>
+                            <td>[[ sponsor.email ]]</td>
+                            <td>
+                                <button 
+                                    class="btn btn-primary btn-sm"
+                                    @click="approveSponsor(sponsor.id)">
+                                    Approve
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
     
-            <!-- Users Section -->
-            <h2>Users</h2>
+            <h2>Active Users</h2>
             <table class="table table-bordered">
                 <thead>
                     <tr>
@@ -108,6 +131,7 @@
                                 @click="deleteUser(user.id)">
                                 Flag
                             </button>
+                        </td>
                     </tr>
                     <tr v-if="users.length === 0">
                         <td colspan="3" class="text-center">No users found</td>
@@ -115,7 +139,6 @@
                 </tbody>
             </table>
     
-            <!-- Campaigns Section -->
             <h2>Campaigns</h2>
             <table class="table table-bordered">
                 <thead>
@@ -153,7 +176,6 @@
                 </tbody>
             </table>
     
-            <!-- Ad Requests Section -->
             <h2>Ad Requests</h2>
             <table class="table table-bordered">
                 <thead>
@@ -195,12 +217,10 @@
 
     <script type="text/x-template" id="sponsor-dashboard">
         <div>
-            <!-- Welcome Section -->
             <h1>Welcome, Sponsor [[ user ]]!</h1>
             <button @click="logout" class="btn btn-danger">Logout</button>
             <button @click="trigger_celery_job" class="btn btn-danger">Trigger celery job</button>
             
-            <!-- Search Influencers Section -->
             <h2>Search Influencers</h2>
             <form @submit.prevent="searchInfluencers">
                 <input v-model="searchQuery" type="text" placeholder="Search Influencers by Name" class="form-control">
@@ -214,7 +234,6 @@
             </ul>
             <p v-else-if="searchQuery && searchResults.length === 0">No influencers found.</p>
     
-            <!-- Campaigns Section -->
             <h2>Your Campaigns</h2>
             <table class="table table-bordered">
                 <thead>
@@ -343,8 +362,6 @@
                 </form>
             </div>
             
-    
-            <!-- Create a New Campaign -->
             <h2>Create a New Campaign</h2>
             <form @submit.prevent="createCampaign">
                 <div class="form-group">

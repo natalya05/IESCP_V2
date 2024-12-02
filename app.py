@@ -1,7 +1,6 @@
 from flask import Flask, render_template,jsonify,request,redirect,url_for,session, send_file, render_template_string
 from datetime import datetime
 from werkzeug.security import generate_password_hash
-# from flask_login import login_user , current_user
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import generate_password_hash
@@ -11,7 +10,6 @@ from celery_worker import make_celery
 import time
 from celery.result import AsyncResult
 from httplib2 import Http
-# from flask_mail import Message , Mail
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -33,8 +31,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-
-# Define models
 user_roles = db.Table(
     'user_roles',
     db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
@@ -55,6 +51,7 @@ class User(db.Model, UserMixin):
     roles = db.relationship('Role', secondary=user_roles, backref=db.backref('users', lazy='dynamic'))
     role = db.Column(db.String(80), nullable=False, default='influencer')
     active = db.Column(db.Boolean(), nullable=False, default=True) 
+    approve = db.Column(db.Boolean(), nullable=False, default=False) 
 
 
 class Campaign(db.Model):
@@ -64,25 +61,23 @@ class Campaign(db.Model):
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
     budget = db.Column(db.Float, nullable=False)
-    visibility = db.Column(db.String(50), nullable=False, default='public')  # 'public' or 'private'
+    visibility = db.Column(db.String(50), nullable=False, default='public')  
     goals = db.Column(db.Text, nullable=True)
     sponsor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-    # Relationship back to User
     sponsor = db.relationship('User', backref='campaigns')
-    # Relationship to AdRequest
+
     ad_requests = db.relationship('AdRequest', back_populates='campaign', lazy='dynamic')
 
 class AdRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    campaign_id = db.Column(db.Integer, db.ForeignKey('campaign.id'), nullable=False)  # Foreign Key to Campaign
-    influencer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)   # Foreign Key to User
+    campaign_id = db.Column(db.Integer, db.ForeignKey('campaign.id'), nullable=False) 
+    influencer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)   
     messages = db.Column(db.Text, nullable=True)
     requirements = db.Column(db.Text, nullable=True)
     payment_amount = db.Column(db.Float, nullable=True)
-    status = db.Column(db.String(50), nullable=False, default='Pending')  # Pending, Accepted, Rejected
+    status = db.Column(db.String(50), nullable=False, default='Pending')  
 
-    # Relationships
     campaign = db.relationship('Campaign', back_populates='ad_requests')
     influencer = db.relationship('User', backref=db.backref('ad_requests', lazy='dynamic'))
 
@@ -418,6 +413,7 @@ def register():
     password = data.get('password')
     role = data.get('role', 'influencer')
     email= data.get('email')
+    approve=False
 
     if not name or not password or not role:
         return jsonify({"error": "Name, password, and role are required"}), 400
@@ -427,7 +423,7 @@ def register():
         return jsonify({"error": "User already exists"}), 409
 
     hashed_password = generate_password_hash(password).decode('utf-8')
-    new_user = User(name=name, password=hashed_password, role=role,email=email)
+    new_user = User(name=name, password=hashed_password, role=role,email=email,approve=approve)
 
     db.session.add(new_user)
     db.session.commit()
@@ -450,18 +446,37 @@ def api_login():
 
     user = User.query.filter_by(name=name).first()
 
-    if user and user.verify_and_update_password(password):
-        role_list = [role.name for role in user.roles] if user.roles else [user.role]
-        session['user_id'] = user.id
-        session['role'] = role_list[0]  # Store role in session
-        print(session['user_id'])
+    if user.role =='influencer' or user.role == 'admin':
+        if user and user.verify_and_update_password(password):
+            role_list = [role.name for role in user.roles] if user.roles else [user.role]
+            session['user_id'] = user.id
+            session['role'] = role_list[0]  
+            print(session['user_id'])
 
-        return jsonify({
-            'success': True,
-            'user_id': user.id,
-            'user_name': user.name,
-            'role': role_list
-        })
+            return jsonify({
+                'success': True,
+                'user_id': user.id,
+                'user_name': user.name,
+                'role': role_list
+            })
+    else:
+        if user.approve==True:
+            if user and user.verify_and_update_password(password):
+                role_list = [role.name for role in user.roles] if user.roles else [user.role]
+                session['user_id'] = user.id
+                session['role'] = role_list[0] 
+                print(session['user_id'])
+
+                return jsonify({
+                    'success': True,
+                    'user_id': user.id,
+                    'user_name': user.name,
+                    'role': role_list
+                })
+        else:
+            return jsonify({'success': False, 'error': 'User is not approved yet'}), 401
+            
+
 
     return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
 
@@ -491,14 +506,13 @@ def clear_session_debug():
 @app.route('/admin/dashboard', methods=['GET'])
 def admin_dashboard():
     if 'user_id' not in session or 'role' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401  # Return 401 if user is not logged in
+        return jsonify({'error': 'Unauthorized'}), 401  
 
     user = User.query.get(session['user_id'])
 
     if not user or user.role != 'admin':
-        return jsonify({'error': 'Forbidden'}), 403  # Ensure only admins can access
+        return jsonify({'error': 'Forbidden'}), 403 
 
-    # Fetch all users
     users = User.query.all()
     users_data = [
         {
@@ -507,8 +521,15 @@ def admin_dashboard():
             'role': u.role
         } for u in users
     ]
+    sponsors = User.query.filter(User.role == "sponsor", User.approve == False).all()
 
-    # Fetch all campaigns
+    sponsors_data = [
+        {
+            "id": sponsor.id,
+            "name": sponsor.name,
+            "email": sponsor.email
+        } for sponsor in sponsors]
+
     campaigns = Campaign.query.all()
     campaigns_data = [
         {
@@ -522,7 +543,6 @@ def admin_dashboard():
         } for c in campaigns
     ]
 
-    # Fetch all ad requests
     ad_requests = AdRequest.query.all()
     ad_requests_data = [
         {
@@ -544,8 +564,28 @@ def admin_dashboard():
     return jsonify({
         'users': users_data,
         'campaigns': campaigns_data,
-        'ad_requests': ad_requests_data
+        'ad_requests': ad_requests_data,
+        'sponsors': sponsors_data,
     })
+
+@app.route("/approve_sponsor/<int:user_id>", methods=["PATCH"])
+def approve_sponsor(user_id):
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        if user.role != "sponsor":
+            return jsonify({"error": "User is not a sponsor"}), 400
+        
+        user.approve = True
+        db.session.commit()
+        return jsonify({"message": "Sponsor approved successfully!"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/sponsor_dashboard", methods=["GET", "POST"])
 def sponsor_dashboard():
