@@ -4,15 +4,15 @@ Vue.component('admin-dashboard', {
     delimiters: ['[[', ']]'],
     data() {
         return {
-            users: [], // List of users
-            campaigns: [], // List of campaigns
-            adRequests: [], // List of ad requests
-            error: null, // Error message if API fails
-            successMessage: null // Success message for actions
+            users: [], 
+            campaigns: [], 
+            adRequests: [], 
+            sponsors: [],
+            error: null, 
+            successMessage: null 
         };
     },
     created() {
-        // Fetch admin dashboard data on component creation
         this.fetchAdminData();
     },
     methods: {
@@ -22,10 +22,20 @@ Vue.component('admin-dashboard', {
                     this.users = response.data.users || [];
                     this.campaigns = response.data.campaigns || [];
                     this.adRequests = response.data.ad_requests || [];
+                    this.sponsors = response.data.sponsors || [];
                 })
                 .catch(error => {
                     console.error('Error fetching admin data:', error);
                     this.error = 'Failed to load admin dashboard data.';
+                });
+        },
+        approveSponsor(userId) {
+            axios.patch(`/approve_sponsor/${userId}`)
+                .then(() => {
+                    alert("Sponsor approved successfully!");
+                })
+                .catch(error => {
+                    console.error("Error approving sponsor:", error);
                 });
         },
         deleteCampaign(campaignId) {
@@ -33,7 +43,6 @@ Vue.component('admin-dashboard', {
                 axios.delete(`/delete_campaignadmin/${campaignId}`)
                     .then(response => {
                         this.successMessage = response.data.message || 'Campaign deleted successfully!';
-                        // Remove the campaign from the list
                         this.campaigns = this.campaigns.filter(campaign => campaign.id !== campaignId);
                     })
                     .catch(error => {
@@ -47,7 +56,6 @@ Vue.component('admin-dashboard', {
                 axios.delete(`/delete_adrequest/${adRequestId}`)
                     .then(response => {
                         this.successMessage = response.data.message || 'Ad request deleted successfully!';
-                        // Remove the ad request from the list
                         this.adRequests = this.adRequests.filter(adRequest => adRequest.id !== adRequestId);
                     })
                     .catch(error => {
@@ -61,7 +69,6 @@ Vue.component('admin-dashboard', {
                 axios.delete(`/delete_user/${userId}`)
                     .then(response => {
                         this.successMessage = response.data.message || 'User deleted successfully.';
-                        // Remove the user from the list
                         this.users = this.users.filter(user => user.id !== userId);
                     })
                     .catch(error => {
@@ -71,23 +78,23 @@ Vue.component('admin-dashboard', {
             }
         },
         logout() {
-            this.$root.logout(); // Use root's logout method
+            this.$root.logout(); 
         }
     }
 });
 
 
-// Sponsor Dashboard Component
+// Sponsor Dashboard 
 Vue.component('sponsor-dashboard', {
     template: '#sponsor-dashboard',
     delimiters: ['[[', ']]'],
     data() {
         return {
-            user: '', // Logged-in sponsor's name
-            searchQuery: '', // Search input for influencers
-            searchResults: [], // Search results
-            searchError: '', // Error during search
-            campaigns: [], // List of campaigns
+            user: '', 
+            searchQuery: '', 
+            searchResults: [], 
+            searchError: '',
+            campaigns: [], 
             influencers: [],
             newCampaign: { // Data for the new campaign form
                 name: '',
@@ -407,6 +414,7 @@ new Vue({
     delimiters: ['[[', ']]'],
     data: {
         isLoginVisible: true,
+        isHomeVisible : true,
         isRegisterVisible: false,
         loginUsername: '',
         loginPassword: '',
@@ -415,19 +423,21 @@ new Vue({
         loginError: '',
         registerError: '',
         registerSuccess: '',
-        role: '', // Tracks the role of the logged-in user
-        isLoading: false, // Tracks if an action is in progress
+        role: '',
+        isLoading: false, 
         message:'Welcome to Influencer Engagement and Sponsorship Coordination Platform'
     },
     methods: {
         showLoginForm() {
             this.isLoginVisible = true;
             this.isRegisterVisible = false;
+            this.isHomeVisible = false;
             this.clearMessages();
         },
         showRegisterForm() {
             this.isRegisterVisible = true;
             this.isLoginVisible = false;
+            this.isHomeVisible = false;
             this.clearMessages();
         },
         clearMessages() {

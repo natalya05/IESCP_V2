@@ -7,73 +7,68 @@
     <title>Flask with Vue.js</title>
 </head>
 <body>
-    <div id="app">
+    <div id="app" class="container mt-5">
        
-
-        <!-- Login/Register Buttons -->
-        <div v-if="!role && isLoginVisible">
-            <h2>[[ message ]]</h2>
-            <button @click="showLoginForm">Login</button>
-            <button @click="showRegisterForm">Register</button>
+        <div v-if="isLoginVisible" class="text-center">
+            <h2 class="mb-4">[[ message ]]</h2>  
         </div>
-
-        <!-- Login Form -->
-        <div v-if="isLoginVisible">
-            <h2>Login</h2>
+    
+        <div v-if="isLoginVisible" class="card mx-auto shadow p-4" style="max-width: 400px;">
+            <h2 class="text-center mb-4">Login</h2>
             <form @submit.prevent="handleLogin">
-                <div>
-                    <label for="login-username">Username:</label>
-                    <input type="text" id="login-username" v-model="loginUsername" required>
+                <div class="mb-3">
+                    <label for="login-username" class="form-label">Username:</label>
+                    <input type="text" id="login-username" v-model="loginUsername" class="form-control" required>
                 </div>
-                <div>
-                    <label for="login-password">Password:</label>
-                    <input type="password" id="login-password" v-model="loginPassword" required>
+                <div class="mb-3">
+                    <label for="login-password" class="form-label">Password:</label>
+                    <input type="password" id="login-password" v-model="loginPassword" class="form-control" required>
                 </div>
-                <p v-if="loginError" class="error">[[ loginError ]]</p>
-                <button type="submit">Login</button>
+                <p v-if="loginError" class="text-danger small">[[ loginError ]]</p>
+                <button type="submit" class="btn btn-primary w-100">Login</button>
             </form>
-            <p>Don't have an account? <button @click="showRegisterForm">Create New Account</button></p>
+            <p class="text-center mt-3">
+                Don't have an account? 
+                <button @click="showRegisterForm" class="btn btn-link">Create New Account</button>
+            </p>
         </div>
-
-        <!-- Register Form -->
-        <div v-if="isRegisterVisible">
-            <h2>Register</h2>
+    
+        <div v-if="isRegisterVisible" class="card mx-auto shadow p-4" style="max-width: 400px;">
+            <h2 class="text-center mb-4">Register</h2>
             <form @submit.prevent="handleRegister">
-                <div>
-                    <label for="register-email">Email:</label>
-                    <input type="email" id="register-email" v-model="registerEmail" required>
+                <div class="mb-3">
+                    <label for="register-email" class="form-label">Email:</label>
+                    <input type="email" id="register-email" v-model="registerEmail" class="form-control" required>
                 </div>
-                
-                <div>
-                    <label for="register-username">Username:</label>
-                    <input type="text" id="register-username" v-model="registerUsername" required>
+                <div class="mb-3">
+                    <label for="register-username" class="form-label">Username:</label>
+                    <input type="text" id="register-username" v-model="registerUsername" class="form-control" required>
                 </div>
-                <div>
-                    <label for="register-password">Password:</label>
-                    <input type="password" id="register-password" v-model="registerPassword" required>
+                <div class="mb-3">
+                    <label for="register-password" class="form-label">Password:</label>
+                    <input type="password" id="register-password" v-model="registerPassword" class="form-control" required>
                 </div>
-                <div>
-                    <label for="register-role">Role:</label>
-                    <select id="register-role" v-model="selectedRole" required>
+                <div class="mb-3">
+                    <label for="register-role" class="form-label">Role:</label>
+                    <select id="register-role" v-model="selectedRole" class="form-select" required>
                         <option value="influencer">Influencer</option>
                         <option value="sponsor">Sponsor</option>
                         <option value="admin">Admin</option>
                     </select>
                 </div>
-                <p v-if="registerError" class="error">[[ registerError ]]</p>
-                <p v-if="registerSuccess" class="success">[[ registerSuccess ]]</p>
-                <button type="submit" :disabled="isLoading">Register</button>
+                <p v-if="registerError" class="text-danger small">[[ registerError ]]</p>
+                <p v-if="registerSuccess" class="text-success small">[[ registerSuccess ]]</p>
+                <button type="submit" :disabled="isLoading" class="btn btn-success w-100">Register</button>
             </form>
-            <p>Already have an account? <button @click="showLoginForm">Login</button></p>
+            <p class="text-center mt-3">
+                Already have an account? 
+                <button @click="showLoginForm" class="btn btn-link">Login</button>
+            </p>
         </div>
 
         <admin-dashboard v-if="role === 'admin'"></admin-dashboard>
         <sponsor-dashboard v-if="role === 'sponsor'"></sponsor-dashboard>
         <influencer-dashboard v-if="role === 'influencer'"></influencer-dashboard>
-
-       
-        <p v-if="!role && !isLoading">Please log in to access the platform.</p>
-
         
     </div>
 
@@ -83,11 +78,38 @@
             <p>Manage platform-wide operations here.</p>
             <button @click="logout" class="btn btn-danger mt-2">Logout</button>
     
-            <!-- Error Message -->
             <p v-if="error" class="text-danger">[[ error ]]</p>
+
+            <div>
+                <h3>Sponsor waiting for approval</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Approval</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="sponsor in sponsors" :key="sponsor.id">
+                            <td>[[ sponsor.id ]]</td>
+                            <td>[[ sponsor.name ]]</td>
+                            <td>[[ sponsor.email ]]</td>
+                            <td>
+                                <button 
+                                    class="btn btn-primary btn-sm"
+                                    @click="approveSponsor(sponsor.id)">
+                                    Approve
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
     
-            <!-- Users Section -->
-            <h2>Users</h2>
+            <h2>Active Users</h2>
             <table class="table table-bordered">
                 <thead>
                     <tr>
@@ -108,6 +130,7 @@
                                 @click="deleteUser(user.id)">
                                 Flag
                             </button>
+                        </td>
                     </tr>
                     <tr v-if="users.length === 0">
                         <td colspan="3" class="text-center">No users found</td>
@@ -115,7 +138,6 @@
                 </tbody>
             </table>
     
-            <!-- Campaigns Section -->
             <h2>Campaigns</h2>
             <table class="table table-bordered">
                 <thead>
@@ -153,7 +175,6 @@
                 </tbody>
             </table>
     
-            <!-- Ad Requests Section -->
             <h2>Ad Requests</h2>
             <table class="table table-bordered">
                 <thead>
@@ -192,30 +213,33 @@
     </script>  
     
     
-
     <script type="text/x-template" id="sponsor-dashboard">
-        <div>
-            <!-- Welcome Section -->
-            <h1>Welcome, Sponsor [[ user ]]!</h1>
-            <button @click="logout" class="btn btn-danger">Logout</button>
-            <button @click="trigger_celery_job" class="btn btn-danger">Trigger celery job</button>
-            
-            <!-- Search Influencers Section -->
-            <h2>Search Influencers</h2>
-            <form @submit.prevent="searchInfluencers">
-                <input v-model="searchQuery" type="text" placeholder="Search Influencers by Name" class="form-control">
-                <button type="submit" class="btn btn-primary mt-2">Search</button>
-            </form>
-            <p v-if="searchError" class="text-danger">[[ searchError ]]</p>
-            <ul v-if="searchResults.length > 0">
-                <li v-for="influencer in searchResults" :key="influencer.id">
-                    [[ influencer.name ]]
-                </li>
-            </ul>
-            <p v-else-if="searchQuery && searchResults.length === 0">No influencers found.</p>
+        <div class="container mt-5">
+            <h1 class="text-center mb-4">Welcome, Sponsor [[ user ]]!</h1>
+            <div class="d-flex justify-content-center mb-4">
+                <button @click="logout" class="btn btn-danger mx-2">Logout</button>
+                <button @click="trigger_celery_job" class="btn btn-warning mx-2">Trigger Celery Job</button>
+            </div>
+
+            <div class="card p-4 shadow">
+                <h2 class="card-title text-center mb-3">Search Influencers</h2>
+                <form @submit.prevent="searchInfluencers" class="mb-3">
+                    <div class="input-group">
+                        <input v-model="searchQuery" type="text" placeholder="Search Influencers by Name" class="form-control">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </div>
+                </form>
+                <p v-if="searchError" class="text-danger text-center">[[ searchError ]]</p>
+                
+                <ul class="list-group" v-if="searchResults.length > 0">
+                    <li v-for="influencer in searchResults" :key="influencer.id" class="list-group-item">
+                        [[ influencer.name ]]
+                    </li>
+                </ul>
+                <p v-else-if="searchQuery && searchResults.length === 0" class="text-center text-muted">No influencers found.</p>
+            </div>
     
-            <!-- Campaigns Section -->
-            <h2>Your Campaigns</h2>
+            <h2 class=" m-2">Your Campaigns</h2>
             <table class="table table-bordered">
                 <thead>
                     <tr>
@@ -249,7 +273,7 @@
                 </tbody>
             </table>
 
-            <h2>Ad Requests</h2>
+            <h2 class="m-2">Ad Requests</h2>
             <table class="table table-bordered">
                 <thead>
                     <tr>
@@ -277,7 +301,7 @@
             </table>
 
             <div v-if="editingCampaignId" class="mt-4">
-                <h2>Edit Campaign</h2>
+                <h2 class="text-center m-2">Edit Campaign</h2>
                 <form @submit.prevent="saveCampaign">
                     <div class="form-group">
                         <label for="name">Campaign Name:</label>
@@ -318,7 +342,7 @@
             </div>
             
             <div v-if="editingAdRequestId" class="mt-4">
-                <h2>Edit Ad Request</h2>
+                <h2 class="text-center m-2">Edit Ad Request</h2>
                 <form @submit.prevent="saveAdRequest">
                     <div class="form-group">
                         <label for="campaign_id">Campaign ID:</label>
@@ -343,9 +367,7 @@
                 </form>
             </div>
             
-    
-            <!-- Create a New Campaign -->
-            <h2>Create a New Campaign</h2>
+            <h2 class="text-center m-2">Create a New Campaign</h2>
             <form @submit.prevent="createCampaign">
                 <div class="form-group">
                     <label for="name">Campaign Name:</label>
@@ -383,7 +405,7 @@
             </form>
             <p v-if="flashMessage" class="text-success mt-2">[[ flashMessage ]]</p>
 
-            <h2>Create a New Ad Request</h2>
+            <h2 class="text-center m-2">Create a New Ad Request</h2>
             <form @submit.prevent="createAdRequest">
                 <div class="form-group">
                     <label for="campaign">Campaign:</label>
