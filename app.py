@@ -80,6 +80,7 @@ class AdRequest(db.Model):
 
     campaign = db.relationship('Campaign', back_populates='ad_requests')
     influencer = db.relationship('User', backref=db.backref('ad_requests', lazy='dynamic'))
+    
 
 user_datastore = SQLAlchemyUserDatastore(db, User, Role)
 security = Security(app, user_datastore)

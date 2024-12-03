@@ -84,17 +84,17 @@ Vue.component('admin-dashboard', {
 });
 
 
-// Sponsor Dashboard Component
+// Sponsor Dashboard 
 Vue.component('sponsor-dashboard', {
     template: '#sponsor-dashboard',
     delimiters: ['[[', ']]'],
     data() {
         return {
-            user: '', // Logged-in sponsor's name
-            searchQuery: '', // Search input for influencers
-            searchResults: [], // Search results
-            searchError: '', // Error during search
-            campaigns: [], // List of campaigns
+            user: '', 
+            searchQuery: '', 
+            searchResults: [], 
+            searchError: '',
+            campaigns: [], 
             influencers: [],
             newCampaign: { // Data for the new campaign form
                 name: '',
@@ -414,6 +414,7 @@ new Vue({
     delimiters: ['[[', ']]'],
     data: {
         isLoginVisible: true,
+        isHomeVisible : true,
         isRegisterVisible: false,
         loginUsername: '',
         loginPassword: '',
@@ -422,19 +423,21 @@ new Vue({
         loginError: '',
         registerError: '',
         registerSuccess: '',
-        role: '', // Tracks the role of the logged-in user
-        isLoading: false, // Tracks if an action is in progress
+        role: '',
+        isLoading: false, 
         message:'Welcome to Influencer Engagement and Sponsorship Coordination Platform'
     },
     methods: {
         showLoginForm() {
             this.isLoginVisible = true;
             this.isRegisterVisible = false;
+            this.isHomeVisible = false;
             this.clearMessages();
         },
         showRegisterForm() {
             this.isRegisterVisible = true;
             this.isLoginVisible = false;
+            this.isHomeVisible = false;
             this.clearMessages();
         },
         clearMessages() {
