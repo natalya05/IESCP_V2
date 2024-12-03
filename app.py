@@ -23,10 +23,11 @@ app.config['SECRET_KEY'] = 'your-secret-key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['PROPAGATE_EXCEPTIONS'] = True  
 app.config['SECURITY_PASSWORD_SALT'] = 'your-security-salt'
-app.config['SECURITY_PASSWORD_SINGLE_HASH'] = True  # Default is True
+app.config['SECURITY_PASSWORD_SINGLE_HASH'] = True  
 app.config['DEBUG'] = True
 app.config['SECURITY_PASSWORD_HASH'] = 'bcrypt'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 
 
 db = SQLAlchemy(app)
@@ -80,6 +81,11 @@ class AdRequest(db.Model):
 
     campaign = db.relationship('Campaign', back_populates='ad_requests')
     influencer = db.relationship('User', backref=db.backref('ad_requests', lazy='dynamic'))
+
+class req_from_inf(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    req_amount = db.Column(db.Float, nullable=False)
+    ad_request_id = db.Column(db.Integer, db.ForeignKey('ad_request.id'), nullable=False)
     
 
 user_datastore = SQLAlchemyUserDatastore(db, User, Role)
@@ -102,6 +108,7 @@ initialize_app(app)
 app.config.update(
     CELERY_BROKER_URL='redis://localhost:6379',
     CELERY_RESULT_BACKEND='redis://localhost:6379'
+
 )
 
 celery = make_celery(app) 
@@ -154,7 +161,6 @@ def send_influencer_reminders():
         ).all()
 
         if not pending_requests:
-            # No ad requests
             bot_message = {
                 'text': f"Hello {influencer.name}, you have no ad requests yet. Check out public campaigns on our site!"
             }
@@ -163,7 +169,7 @@ def send_influencer_reminders():
                 'text': f"Hello {influencer.name}, you have pending ad requests. Check them out on our site!"
             }
 
-        # Send the message via the webhook
+
         message_headers = {'Content-Type': 'application/json; charset=UTF-8'}
         http_obj = Http()
         response = http_obj.request(
@@ -181,42 +187,19 @@ SMPTP_SERVER_PORT=1025
 SENDER_ADDRESS="admin@example.com"
 SENDER_PASSWORD=""
 
-# def send_email(to_address,subject,message,content="html",attachment_file=None):
-#     msg=MIMEMultipart()
-#     msg["From"]=SENDER_ADDRESS
-#     msg["To"]=to_address
-#     msg["Subject"]=subject
-#     if content=="html":      
-#         msg.attach(MIMEText(message,"html"))
-#     else:
-#         msg.attach(MIMEText(message,"plain"))
-        
-#     if attachment_file:
-#         with open(attachment_file,"rb") as attachment:
-            
-#             part =MIMEBase("application","octet-stream")
-#             part.set_payload(attachment.read())
-#             encoders.encode_base64(part)
 
-
-#     s=smtplib.SMTP(host=SMPTP_SERVER_HOST,port=SMPTP_SERVER_PORT)
-#     s.login(SENDER_ADDRESS,SENDER_PASSWORD)
-#     s.send_message(msg)
-#     s.quit()
-#     return True
 def send_email(to_address, subject, message, content="html", attachment_file=None):
     msg = MIMEMultipart()
     msg["From"] = SENDER_ADDRESS
     msg["To"] = to_address
     msg["Subject"] = subject
 
-    # Attach the email body based on the content type
+   
     if content == "html":
-        msg.attach(MIMEText(message, "html"))  # Use 'html' type for rendering HTML content
+        msg.attach(MIMEText(message, "html")) 
     else:
-        msg.attach(MIMEText(message, "plain"))  # Use 'plain' type for plain text
+        msg.attach(MIMEText(message, "plain"))  
 
-    # Add attachment if provided
     if attachment_file:
         with open(attachment_file, "rb") as attachment:
             part = MIMEBase("application", "octet-stream")
@@ -322,6 +305,7 @@ def trigger_celery_job():
         "Task_state":a.state,
         "Task_result":a.result
     }
+    
 
 @app.route("/status/<int:id>")
 def check_status(id):
@@ -336,6 +320,7 @@ def check_status(id):
 def download_file():
     time.sleep(5)
     return send_file("static/data.csv")
+
 
 @app.route('/')
 def index():
@@ -389,23 +374,23 @@ def create_campaign():
 
 @app.route('/api/ad_requests')
 def api_ad_requests():
-    # Query all ad requests and convert them to a dictionary or list format
+    
     ad_requests = AdRequest.query.all()
-    # Convert ad request objects into a list of dictionaries for JSON serialization
+    
     ad_requests_list = [
         {
             'id': ad_request.id,
             'title': ad_request.title,
             'description': ad_request.description,
             'status': ad_request.status
-            # Include other fields as necessary
+            
         }
         for ad_request in ad_requests
     ]
     return jsonify(ad_requests_list)
 
 
-# API Routes
+
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -444,9 +429,7 @@ def get_user_role():
 def api_login():
     name = request.json.get('name')
     password = request.json.get('password')
-
     user = User.query.filter_by(name=name).first()
-
     if user.role =='influencer' or user.role == 'admin':
         if user and user.verify_and_update_password(password):
             role_list = [role.name for role in user.roles] if user.roles else [user.role]
@@ -484,20 +467,20 @@ def api_login():
 
 @app.before_request
 def clear_stale_session():
-    # If there's no user ID in the session, clear the session
+    
     if 'user_id' not in session:
         session.clear()
 
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
-    session.clear()  # Clears all session data
+    session.clear()  
     return jsonify({'success': True, 'message': 'Logged out successfully'})
 
 
 
 @app.route('/debug/session', methods=['GET'])
 def debug_session():
-    return jsonify(dict(session))  # View current session data
+    return jsonify(dict(session))  
 
 @app.route('/debug/clear-session', methods=['GET'])
 def clear_session_debug():
@@ -591,18 +574,17 @@ def approve_sponsor(user_id):
 @app.route("/sponsor_dashboard", methods=["GET", "POST"])
 def sponsor_dashboard():
     if 'user_id' not in session:
-        return jsonify({'error': 'User not logged in'}), 401  # Return 401 if user is not logged in
+        return jsonify({'error': 'User not logged in'}), 401  
 
-    user_id = session['user_id']  # Get the sponsor's user ID from the session
+    user_id = session['user_id']  
     user = User.query.get(user_id)
 
     if not user or user.role != 'sponsor':
-        return jsonify({'error': 'Access denied. Only sponsors can access this page.'}), 403  # Return 403 if not a sponsor
-
+        return jsonify({'error': 'Access denied. Only sponsors can access this page.'}), 403 
     if request.method == 'POST':
-        # Handle campaign creation
+        
         try:
-            data = request.get_json()  # Parse JSON data
+            data = request.get_json()  
             name = data.get('name')
             description = data.get('description')
             start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%d')
@@ -629,7 +611,7 @@ def sponsor_dashboard():
         except Exception as e:
             return jsonify({'error': f'Failed to create campaign: {str(e)}'}), 400
 
-    # Handle GET request
+    
     search_query = request.args.get('search_query', '')
     if search_query:
         search_results = User.query.filter(
@@ -642,11 +624,19 @@ def sponsor_dashboard():
     influencers = User.query.filter_by(role='influencer').all()
     campaigns = Campaign.query.filter_by(sponsor_id=user_id).all()
 
-    # Fetch ad requests related to the sponsor's campaigns
+   
     campaign_ids = [campaign.id for campaign in campaigns]
     ad_requests = AdRequest.query.filter(AdRequest.campaign_id.in_(campaign_ids)).all()
 
-    # Prepare data for JSON response
+    requests = req_from_inf.query.all()
+    requests_data = [
+        {
+            "id": req.id,
+            "req_amount": req.req_amount,
+            "ad_request_id": req.ad_request_id,
+        }
+        for req in requests]
+    
     campaigns_data = [{
         'id': campaign.id,
         'name': campaign.name,
@@ -682,25 +672,25 @@ def sponsor_dashboard():
         'campaigns': campaigns_data,
         'influencers': influencers_data,
         'ad_requests': ad_requests_data,
-        'search_results': search_results_data
+        'search_results': search_results_data,
+        'requests': requests_data
     })
 
 @app.route('/influencer/dashboard', methods=["GET", "POST"])
 def influencer_dashboard():
     if 'user_id' not in session:
-        return redirect(url_for('login'))  # Redirect to login if user is not logged in
+        return redirect(url_for('login'))  
 
-    user_id = session['user_id']  # Retrieve the user ID from the session
+    user_id = session['user_id'] 
     user = User.query.get(user_id)
 
     if not user or user.role != 'influencer':
-        return redirect(url_for('index'))  # Redirect if not an influencer or user doesn't exist
-
-    # Fetch ad requests where the influencer_id matches the logged-in user's ID
+        return redirect(url_for('index'))  
+   
     ad_requests = AdRequest.query.filter_by(influencer_id=user_id).all()
     public_campaigns = Campaign.query.filter_by(visibility="public").all()
 
-    # Prepare the ad request data
+  
     ad_requests_data = [
         {
             'id': ad.id,
@@ -717,7 +707,6 @@ def influencer_dashboard():
         for ad in ad_requests
     ]
 
-    # Prepare the public campaign data
     public_campaigns_data = [
         {
             'id': camp.id,
@@ -736,32 +725,69 @@ def influencer_dashboard():
         'public_campaigns': public_campaigns_data
     })
 
+@app.route("/negotiate", methods=["GET", "POST"])
+def negotiate():
+    if request.method == "POST":
+        try:
+            
+            data = request.get_json() 
+            req_amount = data.get("req_amount")
+            ad_req_id = int(data.get("ad_request_id"))
+            
+            print("Ad Request ID:", ad_req_id)
+
+            
+            req_inf = req_from_inf(
+                req_amount=req_amount,
+                ad_request_id=ad_req_id
+            )
+
+            db.session.add(req_inf)
+            db.session.commit()
+
+            
+            return jsonify({
+                "success": True,
+                "message": "Request sent successfully!"
+            }), 201
+        except Exception as e:
+           
+            return jsonify({
+                "success": False,
+                "message": f"An error occurred: {str(e)}"
+            }), 400
+    else:
+       
+        return jsonify({
+            "success": False,
+            "message": "GET method is not allowed for this endpoint."
+        }), 405
 
 
 @app.route('/search_campaigns', methods=['GET'])
 def search_campaigns():
     if 'user_id' not in session:
-        return jsonify({'error': 'User not logged in'}), 401  # Return an error if user is not logged in
+        return jsonify({'error': 'User not logged in'}), 401  
 
-    user_id = session['user_id']  # Retrieve the user ID from the session
+    user_id = session['user_id']  
 
-    # Get search parameters from the query string
+    
     name = request.args.get('name')
     budget = request.args.get('budget', type=float)
 
-    # Base query: search for public campaigns
+   
     query = Campaign.query.filter_by(visibility='public')
 
-    # Add filters based on search parameters
+   
     if name:
         query = query.filter(Campaign.name.ilike(f'%{name}%'))
     if budget is not None:
         query = query.filter(Campaign.budget <= budget)
 
-    # Execute the query and get results
+    
     campaigns = query.all()
 
-    # Prepare the data for the JSON response
+    
     campaigns_data = [{
         'id': campaign.id,
         'name': campaign.name,
@@ -777,20 +803,19 @@ def search_campaigns():
 @app.route("/update_ad_request_status", methods=["POST"])
 def update_ad_request_status():
     try:
-        data = request.get_json()  # Parse JSON payload
+        data = request.get_json()  
         ad_request_id = data.get("ad_request_id")
         status = data.get("status")
 
-        # Validate inputs
+       
         if not ad_request_id or not status:
             return jsonify({"error": "Ad request ID and status are required."}), 400
 
-        # Fetch the ad request
         ad_request = AdRequest.query.get(ad_request_id)
         if not ad_request:
             return jsonify({"error": "Ad request not found."}), 404
 
-        # Update the status
+       
         ad_request.status = status
         db.session.commit()
 
@@ -807,31 +832,30 @@ def update_ad_request_status():
 @app.route("/create_adreq", methods=["GET", "POST"])
 def create_adreq():
     if 'user_id' not in session:
-        return jsonify({'error': 'User not logged in'}), 401  # Return 401 if user is not logged in
+        return jsonify({'error': 'User not logged in'}), 401 
 
     if request.method == "POST":
-        # Parse JSON data from the request
+       
         data = request.get_json()
         requirements = data.get('requirements')
         payment_amount = data.get('payment_amount')
         campaign_id = data.get('campaign_id')
         influencer_id = data.get('influencer_id')
 
-        # Validate required fields
+       
         if not all([requirements, payment_amount, campaign_id, influencer_id]):
-            return jsonify({'error': 'Missing required fields'}), 400  # Return 400 if data is missing
+            return jsonify({'error': 'Missing required fields'}), 400  
 
         try:
-            # Create a new AdRequest object
+           
             new_ad_request = AdRequest(
                 requirements=requirements,
                 payment_amount=float(payment_amount),
-                status="Pending",  # Default status is "Pending"
+                status="Pending",  
                 campaign_id=int(campaign_id),
                 influencer_id=int(influencer_id)
             )
 
-            # Add the ad request to the database
             db.session.add(new_ad_request)
             db.session.commit()
 
@@ -845,15 +869,15 @@ def create_adreq():
                     'campaign_id': new_ad_request.campaign_id,
                     'influencer_id': new_ad_request.influencer_id
                 }
-            }), 201  # Return 201 Created
+            }), 201  
         except Exception as e:
-            return jsonify({'error': str(e)}), 500  # Handle unexpected errors
+            return jsonify({'error': str(e)}), 500  
 
-    # Handle GET request: Fetch all campaigns and influencers
+    
     campaigns = Campaign.query.all()
     influencers = User.query.filter_by(role='Influencer').all()
 
-    # Prepare data for JSON response
+   
     campaigns_data = [{
         'id': campaign.id,
         'name': campaign.name,
@@ -875,25 +899,22 @@ def create_adreq():
 @app.route("/accept_sp", methods=["POST"])
 def accept_sp():
     if 'user_id' not in session:
-        return jsonify({'error': 'User not logged in'}), 401  # Return 401 if user is not logged in
+        return jsonify({'error': 'User not logged in'}), 401  
 
-    data = request.get_json()  # Parse JSON data from the request
+    data = request.get_json()  
     ad_req_id = data.get("ad_request_id")
     status = data.get("status")
     new_amount = data.get("new_amount")
 
     if not ad_req_id or not status or not new_amount:
-        return jsonify({'error': 'Missing required fields'}), 400  # Return 400 if data is incomplete
-
-    # Query the ad_request by ID
+        return jsonify({'error': 'Missing required fields'}), 400  
+    
     ad_request = AdRequest.query.get(ad_req_id)
 
     if ad_request:
-        # Update the status and payment amount of the ad_request
         ad_request.status = status
         ad_request.payment_amount = float(new_amount)
 
-        # Save the changes to the database
         db.session.commit()
 
         return jsonify({
@@ -912,23 +933,21 @@ def accept_sp():
 @app.route("/reject_sp", methods=["POST"])
 def reject_sp():
     if 'user_id' not in session:
-        return jsonify({'error': 'User not logged in'}), 401  # Return 401 if user is not logged in
+        return jsonify({'error': 'User not logged in'}), 401  
 
-    data = request.get_json()  # Parse JSON data from the request
+    data = request.get_json()  
     ad_req_id = data.get("ad_request_id")
     status = data.get("status")
 
     if not ad_req_id or not status:
-        return jsonify({'error': 'Missing required fields'}), 400  # Return 400 if data is incomplete
+        return jsonify({'error': 'Missing required fields'}), 400  
 
-    # Query the ad_request by ID
     ad_request = AdRequest.query.get(ad_req_id)
 
     if ad_request:
-        # Update the status of the ad_request
         ad_request.status = status
 
-        # Save the changes to the database
+        
         db.session.commit()
 
         return jsonify({
@@ -946,22 +965,20 @@ def reject_sp():
 @app.route("/search_influencers", methods=["GET"])
 def search_influencers():
     if 'user_id' not in session:
-        return jsonify({'error': 'User not logged in'}), 401  # Return 401 if user is not logged in
+        return jsonify({'error': 'User not logged in'}), 401 
 
-    # Get the search query parameter
     search_query = request.args.get('query', '').strip()
 
     if not search_query:
-        return jsonify({'error': 'Search query is required'}), 400  # Return 400 if no query is provided
-
+        return jsonify({'error': 'Search query is required'}), 400  
     try:
-        # Search for influencers whose name matches the query
+    
         influencers = User.query.filter(
             User.role == 'influencer',
             User.name.ilike(f'%{search_query}%')
         ).all()
 
-        # Prepare the response data
+       
         influencers_data = [{
             'id': influencer.id,
             'name': influencer.name
@@ -976,10 +993,10 @@ def search_influencers():
 def update_campaign(id):
     campaign = Campaign.query.get(id)
     if not campaign:
-        return jsonify({'error': 'Campaign not found'}), 404  # Return error if not found
+        return jsonify({'error': 'Campaign not found'}), 404  
 
     try:
-        # Extract data from request
+
         data = request.get_json()
         campaign.name = data.get('name', campaign.name)
         campaign.description = data.get('description', campaign.description)
@@ -989,10 +1006,8 @@ def update_campaign(id):
         campaign.visibility = data.get('visibility', campaign.visibility)
         campaign.goals = data.get('goals', campaign.goals)
 
-        # Save changes
         db.session.commit()
 
-        # Return updated campaign data
         return jsonify({
             'message': 'Campaign updated successfully!',
             'campaign': {
@@ -1015,29 +1030,25 @@ def delete_campaign(id):
     campaign = Campaign.query.get(id)
     
     if campaign:
-        # Delete associated ad requests
         ad_req = AdRequest.query.filter_by(campaign_id=id).all()
         if ad_req:
             for req in ad_req:
                 db.session.delete(req)
                 db.session.commit()
 
-        # Delete the campaign
         db.session.delete(campaign)
         db.session.commit()
 
-        # Return success response
         return jsonify({
             'message': 'Campaign deleted successfully!',
             'status': 'success'
-        }), 200  # HTTP status code for OK
+        }), 200  
     else:
-        # Return failure response if campaign not found
         return jsonify({
             'message': 'Campaign not found.',
             'status': 'error'
-        }), 404  # HTTP status code for Not Found
-
+        }), 404 
+    
 @app.route('/delete_ad_request/<int:id>', methods=['POST'])
 def delete_ad_request(id):
     ad_request = AdRequest.query.get(id)
@@ -1059,19 +1070,18 @@ def delete_ad_request(id):
 def update_ad_request(id):
     ad_request = AdRequest.query.get(id)
     if not ad_request:
-        return jsonify({'error': 'Ad request not found'}), 404  # Return error if not found
+        return jsonify({'error': 'Ad request not found'}), 404  
 
     try:
-        # Extract data from the request
+    
         data = request.get_json()
         ad_request.requirements = data.get('requirements', ad_request.requirements)
         ad_request.payment_amount = float(data.get('payment_amount', ad_request.payment_amount))
         ad_request.status = data.get('status', ad_request.status)
 
-        # Save changes to the database
+
         db.session.commit()
 
-        # Return updated ad request data
         return jsonify({
             'message': 'Ad request updated successfully!',
             'ad_request': {
@@ -1092,7 +1102,6 @@ def delete_campaignadmin(id):
     if not campaign:
         return jsonify({'message': 'Campaign not found.', 'status': 'error'}), 404
 
-    # Delete related ad requests
     ad_requests = AdRequest.query.filter_by(campaign_id=id).all()
     for req in ad_requests:
         db.session.delete(req)
@@ -1124,7 +1133,6 @@ def delete_user(user_id):
     if thisuser.role == "Admin":
         return jsonify({'message': 'Admin users cannot be deleted.', 'status': 'error'}), 403
 
-    # Delete related campaigns and their ad requests if the user is a sponsor
     camp_list = Campaign.query.filter_by(sponsor_id=thisuser.id).all()
     for camp in camp_list:
         ad_req_list = AdRequest.query.filter_by(campaign_id=camp.id).all()
@@ -1132,12 +1140,10 @@ def delete_user(user_id):
             db.session.delete(ad_req)
         db.session.delete(camp)
 
-    # Delete ad requests where the user is an influencer
     ad_req_list = AdRequest.query.filter_by(influencer_id=thisuser.id).all()
     for ad_req in ad_req_list:
         db.session.delete(ad_req)
 
-    # Delete the user
     db.session.delete(thisuser)
     db.session.commit()
 

@@ -96,36 +96,35 @@ Vue.component('sponsor-dashboard', {
             searchError: '',
             campaigns: [], 
             influencers: [],
-            newCampaign: { // Data for the new campaign form
+            newCampaign: { 
                 name: '',
                 description: '',
                 start_date: '',
                 end_date: '',
                 budget: '',
-                // ind_pay: '', // Individual pay per influencer
                 visibility: 'public',
                 goals: ''
             },
-            newAdRequest: { // Data for creating new ad request
+            newAdRequest: { 
                 campaign_id: '',
                 influencer_id: '',
                 requirements: '',
                 payment_amount: ''
             },
-            adRequests: [], // List of all ad requests
+            adRequests: [], 
             editingCampaignId: null,
             editingAdRequestId: null,
-            flashMessage: '' // Feedback message for campaign creation
+            flashMessage: '' 
         };
     },
     created() {
-        // Fetch data when the component is created
+        
         axios.get('/sponsor_dashboard')
             .then(response => {
                 this.user = response.data.user;
                 this.campaigns = response.data.campaigns || [];
                 this.influencers = response.data.influencers || [];
-                this.adRequests = response.data.ad_requests || []; // Fetch ad requests
+                this.adRequests = response.data.ad_requests || []; 
             })
             .catch(error => {
                 console.error('Error fetching sponsor data:', error);
@@ -137,7 +136,7 @@ Vue.component('sponsor-dashboard', {
                 this.searchError = 'Please enter a search term.';
                 return;
             }
-            this.searchError = ''; // Clear previous error
+            this.searchError = ''; 
             axios.get('/sponsor_dashboard', { params: { search_query: this.searchQuery } })
                 .then(response => {
                     this.searchResults = response.data.search_results || [];
@@ -151,16 +150,13 @@ Vue.component('sponsor-dashboard', {
             axios.post('/sponsor_dashboard', this.newCampaign)
                 .then(response => {
                     this.flashMessage = response.data.message || 'Campaign created successfully!';
-                    // Add the new campaign to the campaigns list
                     this.campaigns.push({ ...this.newCampaign, id: response.data.id });
-                    // Reset the form
                     this.newCampaign = {
                         name: '',
                         description: '',
                         start_date: '',
                         end_date: '',
                         budget: '',
-                        // ind_pay: '',
                         visibility: 'public',
                         goals: ''
                     };
@@ -174,9 +170,7 @@ Vue.component('sponsor-dashboard', {
             axios.post('/create_adreq', this.newAdRequest)
                 .then(response => {
                     this.flashMessage = response.data.message || 'Ad request created successfully!';
-                    // Add the new ad request to the list
                     this.adRequests.push(response.data.ad_request);
-                    // Reset the form
                     this.newAdRequest = {
                         campaign_id: '',
                         influencer_id: '',
@@ -190,21 +184,19 @@ Vue.component('sponsor-dashboard', {
                 });
         },
         editCampaign(campaign) {
-            // Pre-fill the form with the campaign's current details for editing
-            this.newCampaign = { ...campaign }; // Clone campaign to avoid direct mutation
-            this.editingCampaignId = campaign.id; // Track which campaign is being edited
+           
+            this.newCampaign = { ...campaign }; 
+            this.editingCampaignId = campaign.id; 
         },
         saveCampaign() {
-            // Update the campaign via API
             axios.post(`/update_campaign/${this.editingCampaignId}`, this.newCampaign)
                 .then(response => {
                     this.flashMessage = response.data.message || 'Campaign updated successfully!';
-                    // Update the campaign in the list
                     const index = this.campaigns.findIndex(c => c.id === this.editingCampaignId);
                     if (index !== -1) {
                         this.campaigns[index] = { ...this.newCampaign, id: this.editingCampaignId };
                     }
-                    // Reset the form
+        
                     this.newCampaign = {
                         name: '',
                         description: '',
@@ -225,10 +217,8 @@ Vue.component('sponsor-dashboard', {
             axios.post(`/update_campaign/${campaignId}`, updatedData)
                 .then(response => {
                     const updatedCampaign = response.data.campaign;
-                    // Find the index of the campaign to update
                     const index = this.campaigns.findIndex(campaign => campaign.id === campaignId);
                     if (index !== -1) {
-                        // Replace the old campaign data with the updated one
                         this.campaigns.splice(index, 1, updatedCampaign);
                     }
                     this.flashMessage = response.data.message || 'Campaign updated successfully!';
@@ -240,14 +230,11 @@ Vue.component('sponsor-dashboard', {
         },
         
         deleteCampaign(id) {
-            // Confirm deletion
             if (!confirm('Are you sure you want to delete this campaign?')) return;
     
-            // Delete the campaign via API
             axios.post(`/delete_campaign/${id}`)
                 .then(response => {
                     this.flashMessage = response.data.message || 'Campaign deleted successfully!';
-                    // Remove the campaign from the list
                     this.campaigns = this.campaigns.filter(campaign => campaign.id !== id);
                 })
                 .catch(error => {
@@ -256,21 +243,17 @@ Vue.component('sponsor-dashboard', {
                 });
         },
         editAdRequest(adRequest) {
-            // Pre-fill the form with ad request details
-            this.newAdRequest = { ...adRequest }; // Clone to avoid direct mutation
-            this.editingAdRequestId = adRequest.id; // Track which ad request is being edited
+            this.newAdRequest = { ...adRequest };
+            this.editingAdRequestId = adRequest.id; 
         },
         saveAdRequest() {
-            // Update the ad request via API
             axios.post(`/update_ad_request/${this.editingAdRequestId}`, this.newAdRequest)
                 .then(response => {
                     this.flashMessage = response.data.message || 'Ad request updated successfully!';
-                    // Update the ad request in the list
                     const index = this.adRequests.findIndex(ad => ad.id === this.editingAdRequestId);
                     if (index !== -1) {
                         this.adRequests[index] = { ...this.newAdRequest, id: this.editingAdRequestId };
                     }
-                    // Reset the form
                     this.newAdRequest = {
                         campaign_id: '',
                         influencer_id: '',
@@ -288,10 +271,8 @@ Vue.component('sponsor-dashboard', {
             axios.post(`/update_ad_request/${adRequestId}`, updatedData)
                 .then(response => {
                     const updatedAdRequest = response.data.ad_request;
-                    // Find the index of the ad request to update
                     const index = this.adRequests.findIndex(req => req.id === adRequestId);
                     if (index !== -1) {
-                        // Replace the old ad request data with the updated one
                         this.adRequests.splice(index, 1, updatedAdRequest);
                     } else {
                         console.warn(`Ad request with ID ${adRequestId} not found in the list.`);
@@ -305,14 +286,11 @@ Vue.component('sponsor-dashboard', {
         },
         
         deleteAdRequest(id) {
-            // Confirm deletion
             if (!confirm('Are you sure you want to delete this ad request?')) return;
     
-            // Delete the ad request via API
             axios.post(`/delete_ad_request/${id}`)
                 .then(response => {
                     this.flashMessage = response.data.message || 'Ad request deleted successfully!';
-                    // Remove the ad request from the list
                     this.adRequests = this.adRequests.filter(adRequest => adRequest.id !== id);
                 })
                 .catch(error => {
@@ -329,7 +307,7 @@ Vue.component('sponsor-dashboard', {
             })
         },
         logout() {
-            this.$root.logout(); // Use root's logout method
+            this.$root.logout(); 
         }
     }
 });
@@ -341,41 +319,61 @@ Vue.component('influencer-dashboard', {
     delimiters: ['[[', ']]'],
     data() {
         return {
-            user: '', // Influencer's name
-            publicCampaigns: [], // Public campaigns for the influencer
-            adRequests: [], // Ad requests specific to the logged-in influencer
+            user: '', 
+            publicCampaigns: [], 
+            adRequests: [], 
             searchQuery: {
-                name: '', // Search by campaign name
-                budget: '' // Search by budget
+                name: '', 
+                budget: '' 
             },
-            searchResults: [], // Search results for public campaigns
+            searchResults: [],
         };
     },
     created() {
         this.fetchInfluencerData();
     },
     methods: {
-        // Fetch data for the influencer (ad requests and public campaigns)
+        
         fetchInfluencerData() {
             axios.get('/influencer/dashboard')
                 .then(response => {
                     console.log("API Response:", response.data);
                     this.user = response.data.user || 'Influencer';
                     this.publicCampaigns = response.data.public_campaigns || [];
-                    this.adRequests = response.data.ad_requests || [];
+                    // this.adRequests = response.data.ad_requests || [];
+                    this.adRequests = response.data.ad_requests.map(req => ({
+                        ...req,
+                        negotiated_amount: req.payment_amount 
+                    }));
                 })
                 .catch(error => {
                     console.error('Error fetching influencer data:', error);
                     alert('Failed to fetch influencer data. Please try again.');
                 });
         },
-
-        // Search public campaigns by name or budget
+        negotiateAmount(adRequestId, negotiatedAmount) {
+            if (!negotiatedAmount || isNaN(negotiatedAmount)) {
+                alert('Please enter a valid amount to negotiate.');
+                return;
+            }
+            axios.post('/negotiate', {
+                ad_request_id: adRequestId,
+                req_amount: negotiatedAmount
+            })
+                .then(response => {
+                    alert(response.data.message || 'Negotiation request sent successfully.');
+                })
+                .catch(error => {
+                    console.error('Error negotiating amount:', error);
+                    alert('Failed to send negotiation request. Please try again.');
+                });
+        },
+       
         searchPublicCampaigns() {
             axios.get('/search_campaigns', {
                 params: {
                     name: this.searchQuery.name,
-                    budget: this.searchQuery.budget || undefined // Only include if budget is provided
+                    budget: this.searchQuery.budget || undefined 
                 }
             })
                 .then(response => {
@@ -389,7 +387,7 @@ Vue.component('influencer-dashboard', {
                 status: status
             })
                 .then(response => {
-                    // Find the ad request and update its status locally
+                    
                     const adRequest = this.adRequests.find(req => req.id === adRequestId);
                     if (adRequest) {
                         adRequest.status = status; // Update status dynamically
@@ -401,9 +399,9 @@ Vue.component('influencer-dashboard', {
                 });
         },
 
-        // Logout the user
+        
         logout() {
-            this.$root.logout(); // Use root's logout method
+            this.$root.logout(); 
         }
     }
 });
@@ -445,7 +443,7 @@ new Vue({
             this.registerError = '';
             this.registerSuccess = '';
         },
-        // Handle user login
+        
         handleLogin() {
             this.isLoading = true;
             axios.post('/api/login', {
@@ -479,29 +477,29 @@ new Vue({
                 .then(response => {
                     if (response.data.success) {
                         this.registerSuccess = response.data.message || 'Registration successful!';
-                        this.registerError = ''; // Clear any previous errors
-                        this.showLoginForm(); // Optionally switch to login form after successful registration
+                        this.registerError = ''; 
+                        this.showLoginForm(); 
                     } else {
                         this.registerError = response.data.error || 'Registration failed.';
-                        this.registerSuccess = ''; // Clear any success message
+                        this.registerSuccess = ''; 
                     }
                 })
                 .catch(error => {
                     console.error('Registration failed:', error);
                     this.registerError = error.response?.data?.error || 'An error occurred during registration.';
-                    this.registerSuccess = ''; // Clear any success message
+                    this.registerSuccess = ''; 
                 })
                 .finally(() => {
                     this.isLoading = false;
                 });
         },
-        // Logout method
+        
         logout() {
             this.isLoading = true;
             axios.post('/api/logout')
                 .then(response => {
                     if (response.data.success) {
-                        window.location.href = '/'; // Redirect to the home page
+                        window.location.href = '/'; 
                     } else {
                         console.error('Logout failed:', response.data.message);
                     }
